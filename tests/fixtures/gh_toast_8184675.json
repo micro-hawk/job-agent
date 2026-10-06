@@ -1,0 +1,322 @@
+{
+ "absolute_url": "https://careers.toasttab.com/jobs?gh_jid=8184675",
+ "data_compliance": [
+  {
+   "type": "gdpr",
+   "requires_consent": false,
+   "requires_processing_consent": false,
+   "requires_retention_consent": false,
+   "retention_period": null,
+   "demographic_data_consent_applies": false
+  }
+ ],
+ "internal_job_id": 3541797,
+ "location": {
+  "name": "Bangalore"
+ },
+ "metadata": [
+  {
+   "id": 206197,
+   "name": "External Posting Category",
+   "value": "Engineering",
+   "value_type": "single_select"
+  }
+ ],
+ "id": 8184675,
+ "updated_at": "2026-09-24T05:06:26-04:00",
+ "requisition_id": "R15094",
+ "title": "Senior Software Engineer, Care Automation",
+ "company_name": "Toast",
+ "first_published": "2026-09-15T10:55:19-04:00",
+ "language": "en",
+ "application_deadline": null,
+ "content": "",
+ "departments": [
+  {
+   "id": 86329,
+   "name": "R & D : BTT : Operations, Sales & Marketing Engineering",
+   "child_ids": [],
+   "parent_id": null
+  }
+ ],
+ "offices": [
+  {
+   "id": 82114,
+   "name": "Bangalore, India",
+   "location": "Bengaluru, Karnataka, India",
+   "child_ids": [],
+   "parent_id": null
+  }
+ ],
+ "ai_disclaimer": null,
+ "include_ai_disclaimer": false,
+ "ai_opt_out_request_url": "http://app.greenhouse.io/ai_opt_out_request/job_post/8184675/ai_opt_out",
+ "compliance": null,
+ "demographic_questions": null,
+ "questions": [
+  {
+   "description": null,
+   "label": "First Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "first_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Last Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "last_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Email",
+   "required": true,
+   "fields": [
+    {
+     "name": "email",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Phone",
+   "required": true,
+   "fields": [
+    {
+     "name": "phone",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Resume/CV",
+   "required": true,
+   "fields": [
+    {
+     "name": "resume",
+     "type": "input_file",
+     "values": []
+    },
+    {
+     "name": "resume_text",
+     "type": "textarea",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "How many years of experience do you have overall?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205975",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "How many years of hands-on experience in Java?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205976",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience in automating the Customer care workflows? (iPaaS, translating business processes into automation)",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205977",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience building or developing customer-facing tools or applications (B2C)? If yes, please elaborate a bit on it.\n",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205978",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience in building with LLMs in production environments?\n",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205979",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Have you leveraged AI to handle workflows that are too complex?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205980",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience in working in Distributed systems?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205981",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience working in API Lifecycle management?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205982",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience in Microservices?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205983",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Do you have experience in Integrating with any external systems (Systems like Toast Web, Toast IQ, Financial systems, Care tools or CCAS platform or anything similar)?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205984",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "This is a Hybrid role based in Bangalore. (2 days at office per week) Are you currently based out of Bangalore?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69205985",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Please share your LinkedIn Profile link here.",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69031374",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": "<p><a href=\"https://careers.toasttab.com/toast-applicant-privacy-statement\">Applicant Privacy Statement</a></p>\n<p><!-- x-tinymce/html -->Additional information for California residents <a href=\"https://careers.toasttab.com/toast-applicant-privacy-statement#AddendumA\" target=\"_blank\" rel=\"noopener\">here</a></p>",
+   "label": "By selecting \"I agree\", I understand that the information I have provided as part of this job application will be processed in accordance with Toast's Applicant Privacy Statement.",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_69031378",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "I agree",
+       "value": 750606908
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "location_questions": [
+  {
+   "description": null,
+   "label": "Longitude",
+   "required": true,
+   "fields": [
+    {
+     "name": "longitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Latitude",
+   "required": true,
+   "fields": [
+    {
+     "name": "latitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Location",
+   "required": true,
+   "fields": [
+    {
+     "name": "location",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  }
+ ]
+}

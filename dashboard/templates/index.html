@@ -1,0 +1,80 @@
+{% from "_icons.html" import icon %}
+{%- set pages = {
+  'today': ('Overview', 'Everything your agent did, at a glance.'),
+  'ready': ('Ready to apply', 'Scored above your fit threshold. The agent submits these on its next apply run.'),
+  'instahyre': ('Instahyre', 'Matches from your Instahyre account. Apply to all of them in one click.'),
+  'manual': ('Manual 1-click', 'Jobs from your LinkedIn and Naukri alerts. Open, apply, then mark applied.'),
+  'needs': ('Needs you', 'A required question had no truthful automatic answer. Finish these by hand.'),
+  'referrals': ('Referrals', 'Warm introductions for your India target companies.'),
+  'applied': ('Applied', 'Every application that went out, newest first.'),
+  'pipeline': ('In pipeline', 'Discovered and waiting to be scored.'),
+  'skipped': ('Skipped', 'Filtered out or scored too low, with the reason for each.'),
+} -%}
+{%- set nav = [
+  ('', [('today', 'home')]),
+  ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('needs', 'alert')]),
+  ('Network', [('referrals', 'users')]),
+  ('Track', [('applied', 'check'), ('pipeline', 'layers'), ('skipped', 'eye-off')]),
+] -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ pages[view][0] }} · Job Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<script src="/static/app.js"></script>
+{% if refresh.running and view == 'instahyre' %}<meta http-equiv="refresh" content="10">{% endif %}
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/">
+      <img src="/static/logo.svg" alt="" width="30" height="30">
+      <span>Job Agent<small>autopilot for your job search</small></span>
+    </a>
+    <nav>
+      {% for section, items in nav %}
+      {% if section %}<div class="nav-section">{{ section }}</div>{% endif %}
+      {% for key, glyph in items %}
+      <a href="/?view={{ key }}" class="nav-item{{ ' on' if view == key else '' }}">
+        {{ icon(glyph) }}<span>{{ pages[key][0] if key != 'today' else 'Overview' }}</span>
+        {% if key != 'today' and nav_counts.get(key) %}<b class="badge{{ ' hot' if key in ('needs', 'instahyre', 'ready') else '' }}">{{ nav_counts[key] }}</b>{% endif %}
+      </a>
+      {% endfor %}
+      {% endfor %}
+    </nav>
+    <div class="sidebar-foot">
+      <div class="spend">{{ icon('dollar', 16) }}<span>${{ '%.2f' % spend.usd }} LLM today</span></div>
+      <button type="button" class="ghost theme-toggle" data-theme-toggle title="Switch light or dark theme">{{ icon('moon', 16) }}{{ icon('sun', 16) }}<span>Theme</span></button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="page-head">
+      <div>
+        <h1>{{ pages[view][0] }}</h1>
+        <p>{{ pages[view][1] }}</p>
+      </div>
+      {% if view not in ('today', 'referrals') %}
+      <label class="search">{{ icon('search', 16) }}<input type="search" placeholder="Search company, role, city…" data-search-input aria-label="Search"><kbd>/</kbd></label>
+      {% endif %}
+    </header>
+
+    {% if view == 'today' %}
+      {% include "_overview.html" %}
+    {% elif view == 'referrals' %}
+      {% include "_referrals.html" %}
+    {% else %}
+      {% if view == 'instahyre' %}{% include "_instahyre.html" %}{% endif %}
+      {% include "_jobs.html" %}
+    {% endif %}
+  </main>
+</div>
+<div class="toasts" data-toasts></div>
+</body>
+</html>

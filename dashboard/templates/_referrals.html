@@ -1,0 +1,40 @@
+{% from "_icons.html" import icon %}
+<div class="banner tip">
+  {{ icon('users', 18) }}
+  <div><b>How to use these</b><p>Open the LinkedIn search and pick 2–3 engineers at the company. Paste the note with your connection request, then send the longer message once they accept. Replace &lt;Name&gt; first.</p></div>
+</div>
+<div class="referrals">
+  {% for ref in referrals %}
+  <article class="referral{{ ' sent' if ref.status == 'sent' else '' }}">
+    <header>
+      <div class="avatar" style="--hue: {{ ref.company | hue }}">{{ ref.company[:1] | upper }}</div>
+      <div class="ref-head">
+        <b>{{ ref.company }}</b>
+        <div class="muted">{% if ref.url.startswith('https://') %}<a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.title }}</a>{% else %}{{ ref.title }}{% endif %}</div>
+      </div>
+      <a class="btn small" href="https://www.linkedin.com/search/results/people/?keywords={{ (ref.company ~ ' software engineer') | qp }}" target="_blank" rel="noopener noreferrer">{{ icon('search', 14) }} Find engineers</a>
+      {% if ref.status == 'todo' %}
+      <form method="post" action="/referrals/{{ ref.id }}/sent" data-toast="Marked {{ ref.company }} as sent"><button type="submit" class="btn small primary">{{ icon('send', 14) }} Mark sent</button></form>
+      {% else %}
+      <span class="tag done">✓ sent {{ ref.sent_at[:10] }}</span>
+      {% endif %}
+    </header>
+    <div class="drafts">
+      <div class="draft-box">
+        <div class="draft-label">Connection note <button type="button" class="copy" data-copy="n{{ ref.id }}">{{ icon('copy', 13) }} Copy</button></div>
+        <div class="draft" id="n{{ ref.id }}">{{ ref.note }}</div>
+      </div>
+      <div class="draft-box">
+        <div class="draft-label">Follow-up message <button type="button" class="copy" data-copy="m{{ ref.id }}">{{ icon('copy', 13) }} Copy</button></div>
+        <div class="draft" id="m{{ ref.id }}">{{ ref.message }}</div>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">{{ icon('users', 28) }}</div>
+    <b>No drafts yet</b>
+    <p class="muted">Run <code>uv run jobagent referrals</code> to draft messages.</p>
+  </div>
+  {% endfor %}
+</div>

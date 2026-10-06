@@ -1,0 +1,31 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "f1e2d3c4",
+      "title": "Software Engineer, Backend",
+      "department": "Engineering",
+      "team": "Platform",
+      "employmentType": "FullTime",
+      "location": "Remote",
+      "secondaryLocations": [{"location": "London"}],
+      "publishedAt": "2026-09-28T12:00:00.000+00:00",
+      "isListed": true,
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "jobUrl": "https://jobs.ashbyhq.com/acme/f1e2d3c4",
+      "applyUrl": "https://jobs.ashbyhq.com/acme/f1e2d3c4/application",
+      "descriptionHtml": "<p>Python and Go.</p>",
+      "descriptionPlain": "Python and Go.",
+      "compensation": {"compensationTierSummary": "$150K – $190K • Offers Equity", "scrapeableCompensationSalarySummary": "$150K - $190K"}
+    },
+    {
+      "id": "hidden1",
+      "title": "Secret Role",
+      "location": "Remote",
+      "isListed": false,
+      "jobUrl": "https://jobs.ashbyhq.com/acme/hidden1",
+      "descriptionPlain": "x"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{% from "_icons.html" import icon %}
+{%- set applied_total = counts.get('applied', 0) -%}
+<section class="hero">
+  <div class="hero-text">
+    <div class="eyebrow" data-greeting>{{ today.strftime('%A, %d %B') }}</div>
+    <h2><span class="big">{{ applied_today }}</span> application{{ '' if applied_today == 1 else 's' }} sent by the agent today</h2>
+    <p>{{ applied_total }} applied in total · {{ nav_counts.ready }} ready for the next run · {{ nav_counts.instahyre }} waiting on Instahyre</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="/?view=instahyre">{{ icon('zap', 16) }} Open Instahyre</a>
+      <a class="btn" href="/?view=ready">{{ icon('target', 16) }} Review ready jobs</a>
+    </div>
+  </div>
+  <div class="hero-chart" aria-label="Applications sent per day, last 14 days">
+    <div class="chart-title">Last 14 days</div>
+    <div class="bars">
+      {% for day in daily %}
+      <div class="bar-col" title="{{ day.day }}: {{ day.n }} sent">
+        <span class="bar-n">{{ day.n if day.n else '' }}</span>
+        <div class="bar{{ ' today' if loop.last else '' }}" style="--h: {{ (day.n / daily_max * 100) | round(1) }}%"></div>
+        <span class="bar-label">{{ day.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  {% for key, label, glyph, tone in [('ready', 'Ready', 'target', 'accent'), ('instahyre', 'Instahyre to-do', 'zap', 'violet'), ('needs', 'Needs you', 'alert', 'warn'), ('referrals', 'Referrals to send', 'users', 'blue')] %}
+  <a class="stat {{ tone }}" href="/?view={{ key }}">
+    <span class="stat-icon">{{ icon(glyph, 18) }}</span>
+    <b>{{ nav_counts.get(key, 0) }}</b>
+    <span>{{ label }}</span>
+  </a>
+  {% endfor %}
+  <div class="stat green">
+    <span class="stat-icon">{{ icon('dollar', 18) }}</span>
+    <b>${{ '%.2f' % spend.usd }}</b>
+    <span>LLM spend today, {{ spend.calls }} calls</span>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h3>Where your jobs are</h3>
+    {%- set funnel = [('applied', 'Applied', 'green'), ('ready', 'Ready', 'accent'), ('manual', 'Apply by hand', 'violet'), ('needs_you', 'Needs you', 'warn'), ('candidate', 'Waiting to score', 'blue'), ('prescored', 'Pre-scored', 'blue'), ('below_threshold', 'Below threshold', 'muted'), ('low_prescore', 'Low pre-score', 'muted'), ('filtered_out', 'Filtered out', 'muted')] -%}
+    {%- set ns = namespace(top=1) -%}
+    {%- for key, _, _ in funnel %}{% if counts.get(key, 0) > ns.top %}{% set ns.top = counts.get(key, 0) %}{% endif %}{% endfor -%}
+    <ul class="funnel">
+      {% for key, label, tone in funnel %}
+      <li class="{{ tone }}">
+        <span class="funnel-label">{{ label }}</span>
+        <span class="funnel-track"><span class="funnel-fill" style="--w: {{ [(counts.get(key, 0) ** 0.5) / (ns.top ** 0.5) * 100, 1.5 if counts.get(key, 0) else 0] | max | round(1) }}%"></span></span>
+        <b>{{ '{:,}'.format(counts.get(key, 0)) }}</b>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <h3>Recent runs</h3>
+    <ol class="timeline">
+      {% for run in runs %}
+      <li class="{{ 'bad' if run.errors else ('live' if not run.finished_at else 'ok') }}">
+        <div class="tl-head">
+          <b>{{ run.started_at[:10] }} · {{ run.started_at[11:16] }}</b>
+          <span class="muted">{{ 'running…' if not run.finished_at else 'finished ' ~ run.finished_at[11:16] }}</span>
+        </div>
+        <div class="tl-body">{{ run.stats | summarize }}</div>
+        {% for error in run.errors %}<div class="err">{{ error }}</div>{% endfor %}
+      </li>
+      {% else %}
+      <li class="empty-line muted">No runs yet. Start one with <code>uv run jobagent run</code>.</li>
+      {% endfor %}
+    </ol>
+  </section>
+</div>

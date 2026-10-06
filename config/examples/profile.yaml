@@ -1,0 +1,49 @@
+name: Alex Morgan
+first_name: Alex
+last_name: Morgan
+email: alex.morgan@example.com
+phone: "+91 90000 00000"
+location:
+  city: Bengaluru
+  state: Karnataka
+  country: India
+  postal_code: "560001"
+  address: 12 Example Street, Bengaluru, Karnataka, India
+links:
+  linkedin: https://linkedin.com/in/alex-morgan-example
+  github: https://github.com/alex-morgan-example
+  portfolio: https://alex-morgan.example.com
+total_experience_years: 4
+current_ctc:
+  total_lpa: 16
+  fixed_lpa: 15
+  variable_lpa: 1
+  text: "₹16 LPA (₹15 LPA fixed + ₹1 LPA variable)"
+notice:
+  last_working_day: 2026-10-30
+  serving: "Serving notice, last working day 30 Oct 2026"
+  after: "Immediate joiner"
+work_authorization:
+  india: true
+  elsewhere: false
+  requires_sponsorship_outside_india: true
+willing_to_relocate: true
+eeo:
+  gender: Male
+  ethnicity: Asian (Indian)
+  veteran: Not a protected veteran
+  disability: No disability
+consent: true
+resume_pdf: ~/Documents/resume.pdf
+declarations:
+  relatives_at_company: false
+  outside_business_activities: false
+  restrictive_agreements: false
+expected_salary:
+  india: "₹28 LPA"
+  global_remote: "USD 40,000 per year"
+  uk: "GBP 55,000 per year"
+  eu: "EUR 60,000 per year"
+  canada: "CAD 95,000 per year"
+  uae: "AED 20,000 per month"
+  singapore: "SGD 7,000 per month"

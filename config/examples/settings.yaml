@@ -1,0 +1,61 @@
+live: false
+daily_cap: 100
+per_company_daily_cap: 1
+per_company_total_cap: 2
+total_cap_exempt_markets: [india]
+markets: [india, global_remote]
+min_seconds_between_submissions: 20
+max_consecutive_failures: 3
+fit_threshold: 70
+prescore_threshold: 55
+prescore_batch_size: 10
+score_limit_per_run: 40
+dedupe_days: 90
+max_job_age_days: 90
+max_required_years: 6
+daily_budget_usd: 100.0
+http_timeout_seconds: 20
+
+models:
+  extract: haiku
+  prescore: haiku
+  alert_parse: haiku
+  score: sonnet
+  referral: sonnet
+
+titles:
+  allow:
+    - '^(\[[^\]]*\]\s*)?(((senior|sr\.?) )?software (engineer|developer)( (i|ii|iii|1|2|3))?|(sde|software development engineer)([ -]?(ii|2))?|product engineer( (ii|iii|2|3))?|((senior|sr\.?) )?(java back[ -]?end|java full[ -]?stack|java|back[ -]?end) (developer|engineer))\s*($|[,\-–—|(:])'
+  deny:
+    - '\bin test\b'
+    - '\b(intern|internship|new grad|graduate)\b'
+    - '\binfra(structure)?\b'
+    - '\b(security|devops|sre|site reliability|network|hardware|embedded|firmware|kubernetes)\b'
+    - '\bdata (scientist|analyst)\b'
+    - '\bclearance\b'
+    - '\b(lead|staff|principal|vice president|manager|architect)\b'
+
+salary:
+  india:
+    target_lpa: 28
+    floor_lpa: 23
+    no_range_tier_a_lpa: 28
+    no_range_lpa: 25
+  minimums:
+    global_remote: {currency: USD, amount: 40000, period: year}
+    uk: {currency: GBP, amount: 55000, period: year}
+    eu: {currency: EUR, amount: 60000, period: year}
+    canada: {currency: CAD, amount: 95000, period: year}
+    uae: {currency: AED, amount: 20000, period: month}
+    singapore: {currency: SGD, amount: 7000, period: month}
+
+gmail:
+  user: you@example.com
+  lookback_days: 7
+  linkedin_senders: [jobalerts-noreply@linkedin.com]
+  naukri_domain: naukri.com
+  naukri_skip: [info@naukri.com, noreply@naukri.com]
+
+dashboard:
+  host: 127.0.0.1
+  port: 8777

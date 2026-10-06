@@ -1,0 +1,37 @@
+{% from "_icons.html" import icon %}
+{% if refresh.running %}
+<div class="banner live">
+  <span class="pulse"></span>
+  <div>
+    <b>Working on Instahyre since {{ refresh.started_at[11:16] }}…</b>
+    <p>A Chrome window is open while it works, so don't close it. This page reloads every 10 seconds.</p>
+  </div>
+</div>
+{% else %}
+<div class="actions">
+  <form method="post" action="/instahyre/apply" class="action primary" onsubmit="return confirm('Apply on Instahyre to up to 40 jobs in this tab, one by one?')" data-toast="Applying on Instahyre. A Chrome window will open.">
+    <button type="submit">
+      <span class="action-icon">{{ icon('zap', 20) }}</span>
+      <span><b>Apply to all in tab</b><small>Opens each job, clicks Apply now, closes the tab and moves on. Up to 40 per click.</small></span>
+    </button>
+  </form>
+  <form method="post" action="/instahyre/refresh" class="action" data-toast="Reading your Instahyre matches…">
+    <button type="submit">
+      <span class="action-icon">{{ icon('refresh', 20) }}</span>
+      <span><b>Refresh from Instahyre</b><small>Pulls new matches and hides closed ones.</small></span>
+    </button>
+  </form>
+  <form method="post" action="/instahyre/applied" class="action" data-toast="Syncing your Instahyre Applied list…">
+    <button type="submit" title="Reads your Instahyre Applied jobs list and removes those jobs from this tab">
+      <span class="action-icon">{{ icon('broom', 20) }}</span>
+      <span><b>Remove applied</b><small>Clears jobs already on your Instahyre Applied list.</small></span>
+    </button>
+  </form>
+</div>
+{% if refresh.last %}
+<div class="banner {{ 'bad' if 'stopped' in refresh.last or 'could not' in refresh.last else 'ok' }}">
+  {{ icon('clock', 18) }}
+  <div><b>Last run at {{ refresh.started_at[11:16] }}</b><p>{{ refresh.last | describe }}</p></div>
+</div>
+{% endif %}
+{% endif %}

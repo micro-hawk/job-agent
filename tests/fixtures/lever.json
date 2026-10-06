@@ -1,0 +1,27 @@
+[
+  {
+    "id": "a1b2c3",
+    "text": "Backend Engineer II",
+    "categories": {"commitment": "Full-time", "department": "Engineering", "location": "Bangalore", "team": "Payments", "allLocations": ["Bangalore"]},
+    "country": "IN",
+    "workplaceType": "hybrid",
+    "descriptionPlain": "We move money.",
+    "lists": [{"text": "Requirements", "content": "<li>3+ years of Java experience</li><li>Kafka</li>"}],
+    "additionalPlain": "Equal opportunity employer.",
+    "hostedUrl": "https://jobs.lever.co/acme/a1b2c3",
+    "applyUrl": "https://jobs.lever.co/acme/a1b2c3/apply",
+    "createdAt": 1790800000000,
+    "salaryRange": {"currency": "INR", "interval": "per-year-salary", "min": 2500000, "max": 3500000}
+  },
+  {
+    "id": "d4e5f6",
+    "text": "Software Engineer",
+    "categories": {"location": null, "allLocations": ["Remote"]},
+    "workplaceType": "remote",
+    "descriptionPlain": "",
+    "lists": [],
+    "hostedUrl": "https://jobs.lever.co/acme/d4e5f6",
+    "applyUrl": "https://jobs.lever.co/acme/d4e5f6/apply",
+    "createdAt": 1790800000000
+  }
+]

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+data/
+STOP
+.superpowers/
+logs/
+/config/*.yaml
+/docs/specs/
+/docs/superpowers/

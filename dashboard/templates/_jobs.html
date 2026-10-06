@@ -1,0 +1,58 @@
+{% from "_icons.html" import icon %}
+{%- set source_names = {'greenhouse': 'Greenhouse', 'lever': 'Lever', 'ashby': 'Ashby', 'instahyre': 'Instahyre', 'linkedin': 'LinkedIn alert', 'naukri': 'Naukri alert'} -%}
+<div class="toolbar" data-filters>
+  <div class="chips" data-market-chips></div>
+  <span class="muted" data-result-count>{{ jobs | length }} job{{ '' if jobs | length == 1 else 's' }}</span>
+</div>
+
+<div class="jobs">
+  {% for job in jobs %}
+  {%- set score = job.score if job.score is not none else job.prescore -%}
+  <article class="job" data-search="{{ (job.company ~ ' ' ~ job.title ~ ' ' ~ job.location ~ ' ' ~ (job.market or '')) | lower }}" data-market="{{ job.market | market if job.market else '' }}">
+    <div class="avatar" style="--hue: {{ job.company | hue }}">{{ job.company[:1] | upper }}</div>
+    <div class="job-main">
+      <div class="job-title">
+        {% if job.url.startswith('https://') %}<a href="{{ job.url }}" target="_blank" rel="noopener noreferrer">{{ job.title }} {{ icon('external', 13) }}</a>{% else %}{{ job.title }}{% endif %}
+      </div>
+      <div class="job-meta">
+        <b>{{ job.company }}</b>
+        {% if job.location %}<span>{{ job.location }}</span>{% endif %}
+      </div>
+      <div class="tags">
+        {% if job.market %}<span class="tag market">{{ job.market | market }}</span>{% endif %}
+        <span class="tag">{{ source_names.get(job.source, job.source) }}</span>
+        {% if job.expected_salary %}<span class="tag money">{{ job.expected_salary }}</span>{% endif %}
+        {% if job.company_tier == 'A' %}<span class="tag tier">Tier A</span>{% endif %}
+      </div>
+      {% if job.detail and (job.detail.reasons or job.detail.gaps) %}
+      <details class="why">
+        <summary>{{ icon('chevron', 14) }} Why this score · {{ job.detail.reasons | length }} match{{ '' if job.detail.reasons | length == 1 else 'es' }}, {{ job.detail.gaps | length }} gap{{ '' if job.detail.gaps | length == 1 else 's' }}</summary>
+        <ul>
+          {% for reason in job.detail.reasons %}<li class="plus">{{ reason }}</li>{% endfor %}
+          {% for gap in job.detail.gaps %}<li class="minus">{{ gap }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+      {% if job.reason %}<div class="job-note">{{ job.reason }}</div>{% endif %}
+    </div>
+    <div class="job-side">
+      {% if score is not none %}
+      <div class="ring {{ 'great' if score >= 80 else ('good' if score >= 70 else 'meh') }}{{ ' pre' if job.score is none else '' }}" style="--p: {{ score }}" title="{{ 'Fit score' if job.score is not none else 'Pre-score' }} {{ score }}/100"><span>{{ score }}</span></div>
+      {% endif %}
+      {% if job.status == 'manual' %}
+      <form method="post" action="/jobs/{{ job.id }}/applied" data-toast="Marked {{ job.company }} as applied"><button type="submit" class="btn small">{{ icon('check', 14) }} Mark applied</button></form>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">{{ icon('inbox', 28) }}</div>
+    <b>Nothing here yet</b>
+    <p class="muted">Jobs land here as the agent discovers and scores them.</p>
+  </div>
+  {% endfor %}
+  <div class="empty no-match" hidden data-no-match>
+    <div class="empty-icon">{{ icon('search', 28) }}</div>
+    <b>No jobs match your search</b>
+  </div>
+</div>

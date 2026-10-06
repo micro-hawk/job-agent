@@ -1,0 +1,75 @@
+headline: Senior Backend Engineer
+summary: >-
+  Backend engineer with 4 years of experience building Java and Spring Boot microservices, event-driven
+  systems on Apache Kafka, and tooling that lets AI agents work safely with production data through MCP servers.
+skills:
+  - group: Languages
+    items: [Java, Python, SQL]
+  - group: Backend & Frameworks
+    items: [Spring Boot, Hibernate, Microservices Architecture, RESTful APIs, System Design]
+  - group: Data & Messaging
+    items: [PostgreSQL, Redis, Elasticsearch, Apache Kafka]
+  - group: Cloud & DevOps
+    items: [AWS, Docker, Kubernetes, CI/CD]
+  - group: AI & Developer Productivity
+    items: ["Model Context Protocol (MCP)", LLM Tool Integration]
+experience:
+  - company: Northwind Payments
+    title: Senior Software Engineer
+    location: Bengaluru, India
+    start: "2024-06"
+    end: present
+    bullets:
+      - id: nw-ledger-service
+        highlight: true
+        tags: [ownership, microservices, java, spring-boot, payments]
+        text: Owned the ledger microservice that records every merchant settlement, and led its move from a shared database to its own PostgreSQL schema.
+      - id: nw-kafka-events
+        highlight: true
+        tags: [kafka, event-driven, architecture, real-time]
+        text: Replaced a nightly reconciliation batch with Kafka events so merchants see settled balances within seconds.
+      - id: nw-mcp-tools
+        highlight: true
+        tags: [mcp, ai, llm, tooling]
+        text: Built read-only MCP servers over production PostgreSQL so support engineers can ask questions of the data in plain language.
+      - id: nw-search
+        tags: [elasticsearch, search, performance]
+        text: Added cursor-based pagination to the transaction search API in Elasticsearch, removing deep-page timeouts.
+  - company: Contoso Health
+    title: Software Engineer
+    location: Pune, India
+    start: "2022-07"
+    end: "2024-06"
+    bullets:
+      - id: ch-appointments
+        highlight: true
+        tags: [rest, microservices, healthcare, reliability]
+        text: Built REST services for appointment booking and reminders used by partner clinics.
+      - id: ch-postgres
+        tags: [postgresql, indexing, sql, performance]
+        text: Tuned PostgreSQL indexes and query plans for the patient records service.
+      - id: ch-redis-cache
+        tags: [redis, caching, performance]
+        text: Introduced a Redis cache in front of the clinic directory API.
+      - id: ch-observability
+        tags: [prometheus, grafana, observability]
+        text: Set up Prometheus and Grafana dashboards and alerts for the booking services.
+projects:
+  - name: Ledgerlite
+    stack: [Python, FastAPI, SQLite]
+    bullets:
+      - id: pr-ledgerlite
+        tags: [python, api, personal-finance]
+        text: A small self-hosted expense tracker with a FastAPI backend and SQLite storage.
+  - name: Tripboard
+    stack: [Next.js, PostgreSQL]
+    bullets:
+      - id: pr-tripboard
+        tags: [full-stack, nextjs, postgresql]
+        text: A shared trip planner where friends vote on places and split costs, built with Next.js and PostgreSQL.
+education:
+  - institution: Example Institute of Technology
+    location: Pune, India
+    degree: Bachelor of Engineering in Computer Science
+    start: "2018-08"
+    end: "2022-05"

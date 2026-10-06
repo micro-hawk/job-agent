@@ -1,0 +1,572 @@
+{
+ "absolute_url": "https://www.mongodb.com/careers/job/?gh_jid=8178900",
+ "data_compliance": [
+  {
+   "type": "gdpr",
+   "requires_consent": false,
+   "requires_processing_consent": false,
+   "requires_retention_consent": false,
+   "retention_period": null,
+   "demographic_data_consent_applies": true
+  }
+ ],
+ "internal_job_id": 3539412,
+ "location": {
+  "name": "Bengaluru"
+ },
+ "metadata": [
+  {
+   "id": 22194060,
+   "name": "Position ID",
+   "value": "10014959",
+   "value_type": "short_text"
+  },
+  {
+   "id": 24918,
+   "name": "Department ID",
+   "value": "D23140-Magenta",
+   "value_type": "single_select"
+  },
+  {
+   "id": 22194061,
+   "name": "Team",
+   "value": "T10512-Magenta",
+   "value_type": "single_select"
+  },
+  {
+   "id": 4914027,
+   "name": "Region",
+   "value": "APAC",
+   "value_type": "single_select"
+  },
+  {
+   "id": 4137836,
+   "name": "Working Model Eligibility",
+   "value": [
+    "1-In Office"
+   ],
+   "value_type": "multi_select"
+  },
+  {
+   "id": 4914029,
+   "name": "Job Level",
+   "value": "Professional - IC",
+   "value_type": "single_select"
+  },
+  {
+   "id": 24109,
+   "name": "Employment Type",
+   "value": "Full-time",
+   "value_type": "single_select"
+  },
+  {
+   "id": 1073551,
+   "name": "Job Type",
+   "value": "Standard",
+   "value_type": "single_select"
+  },
+  {
+   "id": 988684,
+   "name": "JD Link",
+   "value": "https://docs.google.com/document/d/1zIxYNDkumfYtz6awanRZ4NbSzVIgnB7QLVlJz3ZZB5M/edit?tab=t.0",
+   "value_type": "url"
+  },
+  {
+   "id": 5525802,
+   "name": "Baseline Budgeted Salary",
+   "value": null,
+   "value_type": "currency_range"
+  },
+  {
+   "id": 5525816,
+   "name": "Other Large Market Budgeted Salary",
+   "value": null,
+   "value_type": "currency_range"
+  },
+  {
+   "id": 13324394,
+   "name": "Job Post Range (United States)",
+   "value": {
+    "unit": "INR",
+    "max_value": "0.0",
+    "min_value": "0.0"
+   },
+   "value_type": "currency_range"
+  },
+  {
+   "id": 40497768,
+   "name": "Job Post Range (Canada)",
+   "value": {
+    "unit": "INR",
+    "max_value": "0.0",
+    "min_value": "0.0"
+   },
+   "value_type": "currency_range"
+  },
+  {
+   "id": 57694516,
+   "name": "Job Post Range (Poland)",
+   "value": null,
+   "value_type": "currency_range"
+  },
+  {
+   "id": 64002488,
+   "name": "Job Post Range (Italy)",
+   "value": null,
+   "value_type": "currency_range"
+  }
+ ],
+ "id": 8178900,
+ "updated_at": "2026-09-29T09:09:56-04:00",
+ "requisition_id": "3273539412",
+ "title": "Senior Software Engineer",
+ "company_name": "MongoDB",
+ "first_published": "2026-09-29T09:09:56-04:00",
+ "language": "en",
+ "application_deadline": null,
+ "content": "",
+ "departments": [
+  {
+   "id": 345527,
+   "name": "Magenta",
+   "child_ids": [],
+   "parent_id": 370707
+  }
+ ],
+ "offices": [
+  {
+   "id": 26756,
+   "name": "Bengaluru",
+   "location": "Bengaluru, Karnataka, India",
+   "child_ids": [],
+   "parent_id": 23659
+  }
+ ],
+ "ai_disclaimer": null,
+ "include_ai_disclaimer": false,
+ "ai_opt_out_request_url": null,
+ "compliance": null,
+ "demographic_questions": {
+  "header": "LATAM/CANADA/EMEA/APAC/MEXICO Voluntary Demographic Questions",
+  "description": "<p>At MongoDB, we believe in fostering an environment where diverse perspectives can grow and thrive. We are committed to creating a culture of inclusion and a sense of belonging by seeking and valuing employees from different backgrounds. One of our core values as a company is to <strong>Embrace the Power of Differences.</strong></p>\n<p>In the spirit of inclusion, we invite candidates to self-identify as to their gender.&nbsp; The information collected through this voluntary demographic survey is used in aggregate only.&nbsp; Candidate responses to this question will help us to identify areas for improvement in our recruiting processes. If you choose to self-identify, your response will not be used in any hiring or subsequent employment decisions. You are not required to provide this information and you may select \"I don't wish to answer\". Declining to provide this information will not subject you to adverse treatment or retaliation.</p>\n<p>All of your personal information, including your gender, should you choose to provide it, will be collected, stored and processed in accordance with MongoDB&rsquo;s Privacy Notice. Please see our Privacy Notice&nbsp;<a href=\"https://www.mongodb.com/legal/eu-ca-recruitment-privacy-notice\">here</a>.</p>",
+  "questions": [
+   {
+    "id": 32288,
+    "label": "Gender Identity (Select one)",
+    "required": true,
+    "type": "multi_value_single_select",
+    "answer_options": [
+     {
+      "id": 197150,
+      "label": "Female",
+      "free_form": false,
+      "decline_to_answer": false
+     },
+     {
+      "id": 197151,
+      "label": "Male",
+      "free_form": false,
+      "decline_to_answer": false
+     },
+     {
+      "id": 197152,
+      "label": "Non Binary",
+      "free_form": false,
+      "decline_to_answer": false
+     },
+     {
+      "id": 197153,
+      "label": "I want to self describe",
+      "free_form": true,
+      "decline_to_answer": false
+     },
+     {
+      "id": 197154,
+      "label": "I don't wish to answer",
+      "free_form": false,
+      "decline_to_answer": true
+     }
+    ]
+   }
+  ]
+ },
+ "questions": [
+  {
+   "description": null,
+   "label": "First Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "first_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Last Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "last_name",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Email",
+   "required": true,
+   "fields": [
+    {
+     "name": "email",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Phone",
+   "required": true,
+   "fields": [
+    {
+     "name": "phone",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Resume/CV",
+   "required": true,
+   "fields": [
+    {
+     "name": "resume",
+     "type": "input_file",
+     "values": []
+    },
+    {
+     "name": "resume_text",
+     "type": "textarea",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Cover Letter",
+   "required": false,
+   "fields": [
+    {
+     "name": "cover_letter",
+     "type": "input_file",
+     "values": []
+    },
+    {
+     "name": "cover_letter_text",
+     "type": "textarea",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Preferred Name",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_68987085",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Website",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987086",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "LinkedIn Profile",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987087",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Would you like to stay up to date with MongoDB Culture and Careers content?",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987088",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "How did you learn about this job?",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987089",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "AfroTech / Blavity",
+       "value": 750208394
+      },
+      {
+       "label": "Black is Tech",
+       "value": 750208395
+      },
+      {
+       "label": "Built in Austin",
+       "value": 750208396
+      },
+      {
+       "label": "College Careers Page / Event",
+       "value": 750208397
+      },
+      {
+       "label": "ColorStack",
+       "value": 750208398
+      },
+      {
+       "label": "The Diana Initiative",
+       "value": 750208399
+      },
+      {
+       "label": "Glassdoor",
+       "value": 750208400
+      },
+      {
+       "label": "Jumpstart",
+       "value": 750208401
+      },
+      {
+       "label": "Lesbians Who Tech (LWT)",
+       "value": 750208402
+      },
+      {
+       "label": "Life at MongoDB Blog",
+       "value": 750208403
+      },
+      {
+       "label": "LinkedIn",
+       "value": 750208404
+      },
+      {
+       "label": "Latinas in Tech (LiT)",
+       "value": 750208405
+      },
+      {
+       "label": "Mogul",
+       "value": 750208406
+      },
+      {
+       "label": "MongoDB Careers Page",
+       "value": 750208407
+      },
+      {
+       "label": "MongoDB Employee (Current or Former)",
+       "value": 750208408
+      },
+      {
+       "label": "MongoDB Event",
+       "value": 750208409
+      },
+      {
+       "label": "MongoDB Podcast",
+       "value": 750208410
+      },
+      {
+       "label": "MongoDB Social Media Channels",
+       "value": 750208411
+      },
+      {
+       "label": "MongoDB Videos",
+       "value": 750208412
+      },
+      {
+       "label": "MongoDB Talent Communities",
+       "value": 750208413
+      },
+      {
+       "label": "MyGWork",
+       "value": 750208414
+      },
+      {
+       "label": "National Sales Network (NSN)",
+       "value": 750208415
+      },
+      {
+       "label": "Out 4 Undergrad (O4U)",
+       "value": 750208416
+      },
+      {
+       "label": "PowertoFly",
+       "value": 750208417
+      },
+      {
+       "label": "Rewriting the Code",
+       "value": 750208418
+      },
+      {
+       "label": "Women in Technology International (WITI)",
+       "value": 750208419
+      },
+      {
+       "label": "Women in IT Summit",
+       "value": 750208420
+      },
+      {
+       "label": "Other",
+       "value": 750208421
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "If you answered MongoDB Employee, MongoDB Event, or Other, please specify here:",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987090",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Receive alerts for similar jobs? ",
+   "required": false,
+   "fields": [
+    {
+     "name": "question_68987091",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Will you now or in the future require employment sponsorship?",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_68987092",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Have you ever worked at MongoDB before? ",
+   "required": true,
+   "fields": [
+    {
+     "name": "question_68987093",
+     "type": "multi_value_single_select",
+     "values": [
+      {
+       "label": "Yes",
+       "value": 1
+      },
+      {
+       "label": "No",
+       "value": 0
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "location_questions": [
+  {
+   "description": null,
+   "label": "Longitude",
+   "required": true,
+   "fields": [
+    {
+     "name": "longitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Latitude",
+   "required": true,
+   "fields": [
+    {
+     "name": "latitude",
+     "type": "input_hidden",
+     "values": []
+    }
+   ]
+  },
+  {
+   "description": null,
+   "label": "Location",
+   "required": true,
+   "fields": [
+    {
+     "name": "location",
+     "type": "input_text",
+     "values": []
+    }
+   ]
+  }
+ ]
+}
