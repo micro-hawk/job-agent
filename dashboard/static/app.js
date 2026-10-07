@@ -385,7 +385,6 @@
     }
 
     const ENGINE_LINE = /^%\s*!TEX\s+(?:TS-)?program\s*=\s*(\w+)/;
-    const engineSelect = root.querySelector("[data-engine]");
     const overleafEngine = root.querySelector("[data-overleaf-engine]");
 
     function engineOf(tex) {
@@ -404,17 +403,6 @@
       editor.replaceRange(next, { line: 0, ch: 0 }, { line: editor.lastLine() });
       editor.scrollTo(scroll.left, scroll.top);
     }
-
-    engineSelect.addEventListener("change", () => {
-      const line = "% !TEX program = " + engineSelect.value;
-      const tex = value();
-      if (editor && ENGINE_LINE.test(editor.getLine(0))) editor.replaceRange(line, { line: 0, ch: 0 }, { line: 0 });
-      else if (editor) editor.replaceRange(line + "\n", { line: 0, ch: 0 });
-      else replaceAll(ENGINE_LINE.test(tex) ? tex.replace(/^[^\n]*/, line) : line + "\n" + tex);
-      overleafEngine.value = engineSelect.value;
-      recompile();
-    });
-    if (editor) editor.on("change", () => { engineSelect.value = engineOf(editor.getLine(0)); });
 
     function fixNote(note, kind, text, changes) {
       note.hidden = false;

@@ -25,7 +25,7 @@ from agent.db import connect, update_job
 from agent.llm import LLM, LLMError
 from agent.profile import load_profile, load_resume
 from agent.resume_builder import (
-    ENGINES, TEMPLATES as RESUME_TEMPLATES, CompileError, apply_changes, apply_tex_fix, compile_tex, create_draft, delete_draft,
+    TEMPLATES as RESUME_TEMPLATES, CompileError, apply_changes, apply_tex_fix, compile_tex, create_draft, delete_draft,
     engine_of, get_draft, list_drafts, propose_changes, propose_tex_fix, render_tex, tex_targets, update_draft,
 )
 from agent.models import ALERT_SOURCES
@@ -231,7 +231,6 @@ def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
         "draft": draft,
         "source_check": _source_check(conn, draft),
         "levels": {key: value[0] for key, value in LEVELS.items()},
-        "engines": ENGINES,
         "engine": engine_of(draft["tex"]) if draft else "xelatex",
         "has_pdf": bool(builder.get("has_pdf")),
         "error": builder.get("error", ""),

@@ -703,8 +703,6 @@ textarea[data-tex] { flex: 1; width: 100%; min-height: 72vh; border: 0; resize: 
 .rb-delta.down span { background: var(--bad-soft); color: var(--bad); }
 .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
-.rb-engine select { font: inherit; font-size: 12.5px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
-.rb-engine select:hover { border-color: var(--muted); }
 .fix-body { flex: 1; min-width: 0; }
 .fix-apply { flex-shrink: 0; align-self: center; }
 .fix-apply.working { opacity: .7; cursor: progress; }

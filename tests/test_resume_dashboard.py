@@ -192,7 +192,7 @@ def test_draft_scoring_needs_a_compiled_pdf_and_a_level(tmp_path):
     assert master["ok"] and master["baseline"] is None and unknown == 404 and len(llm.calls) == 1
 
 
-def test_score_fixes_offer_apply_buttons_and_the_editor_shows_the_engine(tmp_path):
+def test_score_fixes_offer_apply_buttons_and_overleaf_follows_the_tex_engine_line(tmp_path):
     db = tmp_path / "agent.db"
     conn = connect(db)
     tex = with_engine(render_tex("classic", RESUME, PROFILE), "lualatex")
@@ -204,7 +204,7 @@ def test_score_fixes_offer_apply_buttons_and_the_editor_shows_the_engine(tmp_pat
         result = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "mid"}).json()
     finally:
         stop(server)
-    assert 'data-engine' in editor and '<option value="lualatex" selected>LuaLaTeX</option>' in editor
+    assert 'data-engine' not in editor and 'LuaLaTeX</option>' not in editor
     assert 'name="engine" value="lualatex"' in editor
     assert f'data-apply-fix="/resume/{draft_id}/fix"' in result["html"] and 'data-fix="Add a Golang project"' in result["html"]
 
