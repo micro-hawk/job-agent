@@ -16,7 +16,10 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import yaml
 
-from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, get_check, recent_checks, record_check, score_resume
+from agent.ats import (
+    LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, find_check, fingerprint, get_check, recent_checks, record_check,
+    score_resume,
+)
 from agent.config import load_settings
 from agent.db import connect, update_job
 from agent.llm import LLM, LLMError
@@ -225,7 +228,7 @@ def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
     }
 
 
-def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None) -> dict:
+def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None, ats_focus: dict | None = None) -> dict:
     view = view if view in VIEWS or view in ("referrals", "questionnaires", "ats", "resume") else "today"
     counts = {row["status"]: row["n"] for row in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     spend = conn.execute(
@@ -245,6 +248,10 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
             params += sources
         rows = conn.execute(f"{sql} ORDER BY {order} LIMIT {ROW_LIMIT}", params).fetchall()
         jobs = [dict(row) | {"detail": json.loads(row["score_detail"]) if row["score_detail"] else None} for row in rows]
+    focus = ats_focus or {}
+    ats_checks = recent_checks(conn) if view == "ats" else []
+    focused = get_check(conn, int(focus["check"])) if view == "ats" and str(focus.get("check", "")).isdigit() else None
+    ats_latest = focused or (ats_checks[0] if ats_checks else None)
     nav_counts = {key: _view_count(conn, value[1], value[3]) for key, value in VIEWS.items()}
     nav_counts["referrals"] = conn.execute("SELECT COUNT(*) FROM referrals WHERE status='todo'").fetchone()[0]
     nav_counts["questionnaires"] = conn.execute("SELECT COUNT(*) FROM questionnaires WHERE status IN ('draft', 'manual')").fetchone()[0]
@@ -270,7 +277,9 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
         "jobs": jobs,
         "referrals": referrals,
         "questionnaires": questionnaires,
-        "ats_checks": recent_checks(conn) if view == "ats" else [],
+        "ats_checks": ats_checks,
+        "ats_latest": ats_latest,
+        "ats_saved": bool(ats_latest and focus.get("saved") and str(ats_latest["id"]) == str(focus.get("check"))),
         "ats_levels": {key: value[0] for key, value in LEVELS.items()},
         "ats_error": ats_error,
         "builder": _builder_context(conn, builder or {}) if view == "resume" else {},
@@ -284,8 +293,8 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
     }
 
 
-def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None) -> str:
-    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh, ats_error, builder))
+def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None, ats_focus: dict | None = None) -> str:
+    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh, ats_error, builder, ats_focus))
 
 
 def mark_applied(conn: sqlite3.Connection, job_id: int) -> bool:
@@ -328,25 +337,31 @@ def parse_multipart(content_type: str, body: bytes) -> dict[str, tuple[str | Non
     return fields
 
 
-def check_resume(conn: sqlite3.Connection, fields: dict, llm, model: str, now: str) -> str:
-    level = (fields.get("level") or (None, b""))[1].decode("utf-8", "replace")
+def _field(fields: dict, name: str) -> str:
+    return (fields.get(name) or (None, b""))[1].decode("utf-8", "replace")
+
+
+def check_resume(conn: sqlite3.Connection, fields: dict, llm, model: str, now: str) -> tuple[dict | None, bool, str]:
+    level, jd = _field(fields, "level"), _field(fields, "jd")
     filename, data = fields.get("resume") or (None, b"")
-    jd = (fields.get("jd") or (None, b""))[1].decode("utf-8", "replace")
     if level not in LEVELS:
-        return "choose an experience level"
+        return None, False, "choose an experience level"
     if not filename:
-        return "choose a resume file to upload"
+        return None, False, "choose a resume file to upload"
     if len(data) > MAX_UPLOAD_BYTES:
-        return "that file is larger than 5 MB"
+        return None, False, "that file is larger than 5 MB"
+    key = fingerprint(data, level, jd)
+    saved = None if _field(fields, "rescore") == "1" else find_check(conn, key)
+    if saved:
+        return saved, True, ""
     try:
         text, pages = extract_text(filename, data)
         result = score_resume(text, pages, level, jd, llm, model)
     except AtsInputError as exc:
-        return str(exc)
+        return None, False, str(exc)
     except LLMError as exc:
-        return f"scoring failed: {exc}"
-    record_check(conn, Path(filename).name, level, result, now)
-    return ""
+        return None, False, f"scoring failed: {exc}"
+    return get_check(conn, record_check(conn, Path(filename).name, level, result, now, fingerprint=key)), False, ""
 
 
 def start_resume(conn: sqlite3.Connection, form: dict, loader, llm_factory, model: str, now: str) -> tuple[int | None, str]:
@@ -418,6 +433,7 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                 return
             if parts == ["ats", "check"]:
                 length = int(self.headers.get("Content-Length") or 0)
+                check, saved = None, False
                 if length > MAX_UPLOAD_BYTES + UPLOAD_OVERHEAD_BYTES:
                     ats_state["error"] = "that file is larger than 5 MB"
                     self.close_connection = True
@@ -425,10 +441,15 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                     fields = parse_multipart(self.headers.get("Content-Type") or "", self.rfile.read(length))
                     conn = connect(db_path)
                     try:
-                        ats_state["error"] = check_resume(conn, fields, llm_factory(conn), ats_model, datetime.now().isoformat(timespec="seconds"))
+                        check, saved, ats_state["error"] = check_resume(conn, fields, llm_factory(conn), ats_model, datetime.now().isoformat(timespec="seconds"))
                     finally:
                         conn.close()
-                self.redirect("/?view=ats")
+                location = f"/?view=ats&check={check['id']}&saved=1" if saved else "/?view=ats"
+                if "application/json" in (self.headers.get("Accept") or ""):
+                    self.send_json({"location": location, "saved": saved, "check": check and check["id"],
+                                    "score": check and check["score"], "created_at": check and check["created_at"]})
+                    return
+                self.redirect(location)
                 return
             if parts[0] == "resume":
                 self.resume_post(parts)
@@ -512,14 +533,17 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
             finally:
                 conn.close()
             if "application/json" in (self.headers.get("Accept") or ""):
-                body = json.dumps(result).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                self.send_json(result)
                 return
             self.redirect(f"/?view=resume&draft={draft['id']}")
+
+        def send_json(self, payload: dict) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def send_draft_file(self, name: str, download: bool) -> None:
             stem, _, kind = name.partition(".")
@@ -584,7 +608,8 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                     draft = query.get("draft", [""])[0]
                     builder = {"draft": draft, "check": query.get("check", [""])[0], "error": resume_state["error"], "has_pdf": draft.isdigit() and (pdf_dir / f"{draft}.pdf").is_file()}
                     resume_state["error"] = ""
-                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status(), error, builder).encode("utf-8")
+                focus = {"check": query.get("check", [""])[0], "saved": query.get("saved", [""])[0] == "1"}
+                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status(), error, builder, focus).encode("utf-8")
             finally:
                 conn.close()
             self.send_response(200)

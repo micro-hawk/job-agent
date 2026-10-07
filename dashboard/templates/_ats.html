@@ -1,5 +1,5 @@
 {% from "_icons.html" import icon %}
-{% set latest = ats_checks[0] if ats_checks else None %}
+{% set latest = ats_latest %}
 {% macro band(score) -%}{{ 'good' if score >= 75 else 'mid' if score >= 55 else 'low' }}{%- endmacro %}
 {% if ats_error %}
 <div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not score that resume</b><p>{{ ats_error }}</p></div></div>
@@ -29,8 +29,10 @@
     <div class="ats-step"><span>3</span> Job description <em>optional</em></div>
     <textarea name="jd" rows="5" class="jd" placeholder="Paste a job description to check which of its keywords your resume is missing"></textarea>
 
-    <button type="submit" class="btn primary ats-go">{{ icon('gauge', 16) }} Check score</button>
-    <p class="small-print">{{ icon('eye-off', 13) }} Read in memory and never saved. Only the score and feedback are kept.</p>
+    <input type="hidden" name="rescore" value="" data-rescore-input>
+    <button type="submit" class="btn primary ats-go" data-ats-submit>{{ icon('gauge', 16) }} <span data-submit-label>Check score</span></button>
+    <p class="rescore-hint" data-rescore-hint hidden>{{ icon('sparkle', 13) }} Choose the same file to get a fresh score from Claude.{% if latest and latest.result.with_jd %} Paste the job description again to score against it.{% endif %}</p>
+    <p class="small-print">{{ icon('eye-off', 13) }} Read in memory and never saved. Only the score, feedback and a fingerprint of the file are kept, so the same resume is not scored twice.</p>
   </form>
 
   {% if latest %}
@@ -50,10 +52,16 @@
         <div class="muted">{{ latest.level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
         <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
       </div>
+      <div class="ats-actions">
+      <button type="button" class="btn small" data-rescore title="Upload the file again and get a fresh score from Claude">{{ icon('sparkle', 13) }} Score again</button>
       <form method="post" action="/ats/{{ latest.id }}/delete" class="ats-clear">
         <button type="submit" class="btn small" data-confirm="The score and feedback for {{ latest.filename }} will be removed from history." data-confirm-title="Remove this result?" data-confirm-ok="Remove" data-confirm-danger>{{ icon('x', 13) }} Clear</button>
       </form>
+      </div>
     </div>
+    {% if ats_saved %}
+    <div class="saved-note">{{ icon('check', 15) }}<span><b>Saved result</b> from {{ latest.created_at[:16] | replace('T', ' ') }} · no tokens used. This file was already scored with the same level and job description.</span></div>
+    {% endif %}
 
     {% set bars = [('Parsing', r.parse_score)] + ([('Keywords', r.keyword_score)] if r.keyword_score is not none else []) + [('Content', r.content_score), ('Impact', r.ratings.impact), ('Seniority', r.ratings.seniority), ('Clarity', r.ratings.clarity)] %}
     <div class="ats-bars">
@@ -112,9 +120,9 @@
     <form method="post" action="/ats/clear"><button type="submit" class="btn small" data-confirm="All {{ ats_checks | length }} results will be removed from history. This cannot be undone." data-confirm-title="Clear all results?" data-confirm-ok="Clear all" data-confirm-danger>Clear all</button></form>
   </div>
   {% for check in ats_checks %}
-  <div class="hist-row">
+  <div class="hist-row{{ ' on' if latest and check.id == latest.id else '' }}">
     <span class="hist-score {{ band(check.score) }}">{{ check.score }}</span>
-    <span class="hist-name">{{ check.filename }}<small class="muted">{{ check.level_label }}</small></span>
+    <a class="hist-name" href="/?view=ats&check={{ check.id }}">{{ check.filename }}<small class="muted">{{ check.level_label }}</small></a>
     <span class="hist-bar"><i class="{{ band(check.score) }}" style="--w: {{ check.score }}%"></i></span>
     <span class="muted">{{ check.created_at[:10] }}</span>
     <form method="post" action="/ats/{{ check.id }}/delete"><button type="submit" class="icon-btn" title="Remove this result" aria-label="Remove {{ check.filename }}">{{ icon('x', 14) }}</button></form>

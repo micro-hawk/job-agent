@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import math
@@ -133,10 +134,16 @@ def score_resume(text: str, pages: int, level: str, jd: str, llm, model: str) ->
     }
 
 
-def record_check(conn: sqlite3.Connection, filename: str, level: str, result: dict, now: str) -> int:
+def fingerprint(data: bytes, level: str, jd: str) -> str:
+    digest = hashlib.sha256(data)
+    digest.update(b"\0" + level.encode("utf-8") + b"\0" + " ".join(jd.split()).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def record_check(conn: sqlite3.Connection, filename: str, level: str, result: dict, now: str, fingerprint: str = "") -> int:
     cursor = conn.execute(
-        "INSERT INTO ats_checks (filename, level, score, result, created_at) VALUES (?, ?, ?, ?, ?)",
-        (filename, level, result["score"], json.dumps(result), now),
+        "INSERT INTO ats_checks (filename, level, score, result, created_at, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
+        (filename, level, result["score"], json.dumps(result), now, fingerprint),
     )
     conn.commit()
     return cursor.lastrowid
@@ -156,7 +163,12 @@ def clear_checks(conn: sqlite3.Connection) -> int:
 
 def get_check(conn: sqlite3.Connection, check_id: int) -> dict | None:
     row = conn.execute("SELECT * FROM ats_checks WHERE id = ?", (check_id,)).fetchone()
-    return dict(row) | {"result": json.loads(row["result"])} if row else None
+    return dict(row) | {"result": json.loads(row["result"]), "level_label": LEVELS.get(row["level"], (row["level"],))[0]} if row else None
+
+
+def find_check(conn: sqlite3.Connection, fingerprint: str) -> dict | None:
+    row = conn.execute("SELECT id FROM ats_checks WHERE fingerprint = ? AND fingerprint != '' ORDER BY id DESC LIMIT 1", (fingerprint,)).fetchone()
+    return get_check(conn, row["id"]) if row else None
 
 
 def recent_checks(conn: sqlite3.Connection, limit: int = HISTORY) -> list[dict]:

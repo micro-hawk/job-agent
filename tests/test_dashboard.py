@@ -564,3 +564,42 @@ def test_ats_checks_can_be_cleared_from_the_page(tmp_path):
         server.shutdown()
         server.server_close()
     assert conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 0
+
+
+def test_same_resume_reuses_the_saved_score_until_scored_again(tmp_path):
+    from tests.fakes import StubLLM
+    from tests.test_ats import RESUME, make_docx
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    llm = StubLLM({"ats": lambda prompt: {"impact": 80, "seniority": 70, "clarity": 75, "keywords": ["Kafka"], "fixes": ["Lead with impact"]}})
+    server, base = serve_ats(db, llm)
+    docx = make_docx(RESUME.splitlines())
+
+    def upload(name="cv.docx", jd="Kafka  roles", **extra):
+        return httpx.post(f"{base}/ats/check", data={"level": "senior", "jd": jd, **extra}, files={"resume": (name, docx)})
+
+    try:
+        assert upload().headers["location"] == "/?view=ats"
+        first = conn.execute("SELECT id FROM ats_checks").fetchone()[0]
+        again = upload(name="renamed.docx", jd="Kafka roles")
+        assert again.headers["location"] == f"/?view=ats&check={first}&saved=1"
+        page = httpx.get(f"{base}{again.headers['location']}").text
+        as_json = httpx.post(f"{base}/ats/check", data={"level": "senior", "jd": "Kafka roles"}, files={"resume": ("cv.docx", docx)},
+                             headers={"Accept": "application/json"}).json()
+        upload(jd="Golang roles")
+        assert upload(rescore="1").headers["location"] == "/?view=ats"
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert len(llm.calls) == 3 and conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 3
+    assert "Saved result" in page and "no tokens used" in page and 'data-rescore' in page
+    assert as_json == {"location": f"/?view=ats&check={first}&saved=1", "saved": True, "check": first, "score": as_json["score"], "created_at": as_json["created_at"]}
+
+
+def test_ats_view_can_focus_an_older_check(conn):
+    from agent.ats import record_check
+    older = record_check(conn, "old.pdf", "junior", ats_result(40), NOW)
+    record_check(conn, "new.pdf", "mid", ats_result(), NOW)
+    html = render(conn, "ats", TODAY, ats_focus={"check": str(older), "saved": True})
+    assert f'action="/ats/{older}/delete" class="ats-clear"' in html and "Saved result" in html
+    assert "Saved result" not in render(conn, "ats", TODAY)

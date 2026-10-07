@@ -5,7 +5,8 @@ import zipfile
 import pytest
 
 from agent.ats import (
-    LEVELS, AtsInputError, blend, clear_checks, delete_check, extract_text, parse_checks, record_check, recent_checks, score_resume,
+    LEVELS, AtsInputError, blend, clear_checks, delete_check, extract_text, find_check, fingerprint, parse_checks, record_check, recent_checks,
+    score_resume,
 )
 
 from tests.fakes import NOW, StubLLM
@@ -148,3 +149,27 @@ def test_checks_can_be_deleted_one_at_a_time_or_all(conn):
     assert delete_check(conn, ids[1]) and not delete_check(conn, ids[1])
     assert [check["filename"] for check in recent_checks(conn)] == ["c.pdf", "a.pdf"]
     assert clear_checks(conn) == 2 and recent_checks(conn) == []
+
+
+def test_fingerprint_covers_file_level_and_job_description_but_not_whitespace():
+    base = fingerprint(b"resume", "mid", "Kafka  and\nGolang ")
+    assert base == fingerprint(b"resume", "mid", "Kafka and Golang") and len(base) == 64
+    assert len({base, fingerprint(b"resume2", "mid", "Kafka and Golang"), fingerprint(b"resume", "senior", "Kafka and Golang"), fingerprint(b"resume", "mid", "")}) == 4
+
+
+def test_saved_checks_are_found_by_fingerprint(conn):
+    llm = StubLLM({"ats": rubric(["Kafka"])})
+    result = score_resume(RESUME, 1, "mid", "", llm, "sonnet")
+    older = record_check(conn, "cv.pdf", "mid", result, NOW, fingerprint="abc")
+    newer = record_check(conn, "cv-renamed.pdf", "mid", result, NOW, fingerprint="abc")
+    record_check(conn, "other.pdf", "mid", result, NOW)
+    assert find_check(conn, "abc")["id"] == newer and find_check(conn, "abc")["result"] == result
+    assert find_check(conn, "zzz") is None and older != newer
+
+
+def test_old_databases_gain_the_fingerprint_column(tmp_path):
+    import sqlite3
+    from agent.db import connect
+    db = tmp_path / "old.db"
+    sqlite3.connect(db).executescript("CREATE TABLE ats_checks (id INTEGER PRIMARY KEY, filename TEXT NOT NULL, level TEXT NOT NULL, score INTEGER NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL);")
+    assert "fingerprint" in {row["name"] for row in connect(db).execute("PRAGMA table_info(ats_checks)")}

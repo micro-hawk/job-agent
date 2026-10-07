@@ -481,7 +481,15 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 .ats-placeholder li .icon { color: var(--green); }
 
 .ats-history { margin-top: 18px; }
-.ats-clear { margin-left: auto; align-self: flex-start; }
+.ats-actions { margin-left: auto; align-self: flex-start; display: flex; gap: 8px; }
+.saved-note { display: flex; gap: 10px; align-items: flex-start; margin: -8px 0 20px; padding: 10px 14px; border-radius: 10px; background: var(--green-soft); color: var(--fg); font-size: 13px; animation: rise .4s ease both; }
+.saved-note svg { color: var(--green); flex: none; margin-top: 1px; }
+.ats-form.rescoring .dropzone { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.rescore-hint[hidden] { display: none; }
+.rescore-hint { display: flex; gap: 6px; align-items: center; margin: 10px 0 0; font-size: 12.5px; color: var(--accent); }
+a.hist-name { color: var(--fg); text-decoration: none; }
+a.hist-name:hover { color: var(--accent); }
+.hist-row.on { background: var(--panel-2); border-radius: 8px; }
 .hist-head { display: flex; align-items: center; justify-content: space-between; }
 .hist-head h3 { margin: 0; }
 .hist-head + .hist-row { margin-top: 12px; }

@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS ats_checks (
     level TEXT NOT NULL,
     score INTEGER NOT NULL,
     result TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    fingerprint TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS resume_drafts (
     id INTEGER PRIMARY KEY,
@@ -132,6 +133,9 @@ def connect(path) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     if "suggestions" not in {row["name"] for row in conn.execute("PRAGMA table_info(questionnaires)")}:
         conn.execute("ALTER TABLE questionnaires ADD COLUMN suggestions TEXT NOT NULL DEFAULT '{}'")
+        conn.commit()
+    if "fingerprint" not in {row["name"] for row in conn.execute("PRAGMA table_info(ats_checks)")}:
+        conn.execute("ALTER TABLE ats_checks ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''")
         conn.commit()
     return conn
 

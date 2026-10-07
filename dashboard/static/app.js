@@ -100,15 +100,66 @@
     ["dragenter", "dragover"].forEach(name => zone.addEventListener(name, () => zone.classList.add("over")));
     ["dragleave", "drop"].forEach(name => zone.addEventListener(name, () => zone.classList.remove("over")));
 
+    const rescore = form.querySelector("[data-rescore-input]");
+    const label = form.querySelector("[data-submit-label]");
+    const again = document.querySelector("[data-rescore]");
+    if (again) again.addEventListener("click", () => {
+      rescore.value = "1";
+      label.textContent = "Score again with Claude";
+      form.classList.add("rescoring");
+      form.querySelector("[data-rescore-hint]").hidden = false;
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+      input.click();
+    });
+
+    function send(data) {
+      return fetch(form.action, { method: "POST", body: data, headers: { Accept: "application/json" } }).then(response => {
+        if (!response.ok) throw new Error(response.status);
+        return response.json();
+      });
+    }
+
+    async function score(data) {
+      const button = form.querySelector("button[type=submit]");
+      button.disabled = true;
+      const pending = setTimeout(() => showProgress(form, overlay, 15), 300);
+      let reply;
+      try {
+        reply = await send(data);
+      } catch (failure) {
+        clearTimeout(pending);
+        HTMLFormElement.prototype.submit.call(form);
+        return;
+      }
+      clearTimeout(pending);
+      if (reply.saved && data.get("rescore") !== "1") {
+        overlay.hidden = true;
+        button.disabled = false;
+        const when = String(reply.created_at || "").slice(0, 16).replace("T", " ");
+        const fresh = await confirmDialog({
+          title: "Already scored",
+          message: "This file was scored " + reply.score + "/100 on " + when + " with the same level and job description. Use that result for free, or ask Claude to score it again?",
+          ok: "Score again",
+          cancel: "Use saved result",
+          focusCancel: true,
+        });
+        if (fresh) {
+          data.set("rescore", "1");
+          return score(data);
+        }
+      }
+      window.location.href = reply.location;
+    }
+
     form.addEventListener("submit", event => {
+      event.preventDefault();
       const problem = fileProblem(input.files[0]);
       if (problem) {
-        event.preventDefault();
         error.hidden = false;
         error.textContent = problem;
         return;
       }
-      showProgress(form, overlay, 15);
+      score(new FormData(form));
     });
   }
 
@@ -157,12 +208,13 @@
     modal.querySelector("p").textContent = options.message || "";
     modal.querySelector("p").hidden = !options.message;
     ok.textContent = options.ok || "Confirm";
+    cancel.textContent = options.cancel || "Cancel";
     ok.className = "btn " + (options.danger ? "danger" : "primary");
     modal.classList.toggle("is-danger", Boolean(options.danger));
     const opener = document.activeElement;
     modal.hidden = false;
     requestAnimationFrame(() => modal.classList.add("open"));
-    (options.danger ? cancel : ok).focus();
+    (options.danger || options.focusCancel ? cancel : ok).focus();
 
     return new Promise(resolve => {
       function close(answer) {
