@@ -6,13 +6,14 @@
   'manual': ('Manual 1-click', 'Jobs from your LinkedIn and Naukri alerts. Open, apply, then mark applied.'),
   'needs': ('Needs you', 'A required question had no truthful automatic answer. Finish these by hand.'),
   'referrals': ('Referrals', 'Warm introductions for your India target companies.'),
+  'questionnaires': ('Questionnaires', 'Screening questions recruiters sent on Instahyre. Review the drafted answers, then submit.'),
   'applied': ('Applied', 'Every application that went out, newest first.'),
   'pipeline': ('In pipeline', 'Discovered and waiting to be scored.'),
   'skipped': ('Skipped', 'Filtered out or scored too low, with the reason for each.'),
 } -%}
 {%- set nav = [
   ('', [('today', 'home')]),
-  ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('needs', 'alert')]),
+  ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('questionnaires', 'send'), ('needs', 'alert')]),
   ('Network', [('referrals', 'users')]),
   ('Track', [('applied', 'check'), ('pipeline', 'layers'), ('skipped', 'eye-off')]),
 ] -%}
@@ -28,7 +29,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <script src="/static/app.js"></script>
-{% if (refresh.running and view == 'instahyre') or (manual_refresh.running and view == 'manual') %}<meta http-equiv="refresh" content="10">{% endif %}
+{% if (refresh.running and view in ('instahyre', 'questionnaires')) or (manual_refresh.running and view == 'manual') %}<meta http-equiv="refresh" content="10">{% endif %}
 </head>
 <body>
 <div class="app">
@@ -60,7 +61,7 @@
         <h1>{{ pages[view][0] }}</h1>
         <p>{{ pages[view][1] }}</p>
       </div>
-      {% if view not in ('today', 'referrals') %}
+      {% if view not in ('today', 'referrals', 'questionnaires') %}
       <label class="search">{{ icon('search', 16) }}<input type="search" placeholder="Search company, role, city…" data-search-input aria-label="Search"><kbd>/</kbd></label>
       {% endif %}
     </header>
@@ -69,6 +70,8 @@
       {% include "_overview.html" %}
     {% elif view == 'referrals' %}
       {% include "_referrals.html" %}
+    {% elif view == 'questionnaires' %}
+      {% include "_questionnaires.html" %}
     {% else %}
       {% if view == 'instahyre' %}{% include "_instahyre.html" %}{% endif %}
       {% if view == 'manual' %}{% include "_manual.html" %}{% endif %}

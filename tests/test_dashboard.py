@@ -362,3 +362,92 @@ def test_manual_view_shows_refresh_button_and_last_result(conn):
 def test_manual_view_reloads_while_refreshing(conn):
     html = render(conn, "manual", TODAY, manual_refresh={"running": True, "started_at": "2026-10-05T10:05:00", "last": ""})
     assert 'http-equiv="refresh"' in html and 'action="/manual/refresh"' not in html
+
+
+QUESTIONS = [
+    {"id": 1, "text": "Which LLMs have you used? <b>", "type": 0, "required": True, "position": 0},
+    {"id": 2, "text": "Biggest AI project?", "type": 0, "required": True, "position": 1},
+]
+
+
+def add_questionnaire(conn, status="draft", answers=None, title="Acme - SDE 2"):
+    cursor = conn.execute(
+        "INSERT INTO questionnaires (questionnaire_id, opportunity_id, job_title, url, questions, answers, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (title, "1", title, "https://www.instahyre.com/questionnaire/1/100", json.dumps(QUESTIONS), json.dumps(answers or {}), status, NOW),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def test_questionnaires_view_shows_drafts_for_review(conn):
+    add_questionnaire(conn, answers={"1": "GPT-4 in a support bot", "2": ""})
+    add_questionnaire(conn, status="manual", title="Beta - Java")
+    add_questionnaire(conn, status="submitted", title="Gamma - SDE")
+    html = render(conn, "questionnaires", TODAY)
+    assert "Acme - SDE 2" in html and "GPT-4 in a support bot" in html
+    assert "Which LLMs have you used? &lt;b&gt;" in html
+    assert 'name="a_2"' in html and "Needs your answer" in html
+    assert "Beta - Java" in html and 'href="https://www.instahyre.com/questionnaire/1/100"' in html
+    assert "Gamma - SDE" in html
+    assert 'action="/questionnaires/fetch"' in html
+
+
+def test_questionnaires_nav_counts_drafts_and_manual(conn):
+    add_questionnaire(conn)
+    add_questionnaire(conn, status="manual", title="Beta")
+    add_questionnaire(conn, status="sent", title="Gamma")
+    assert render(conn, "today", TODAY) and __import__("dashboard.server", fromlist=["build_context"]).build_context(conn, "today", TODAY)["nav_counts"]["questionnaires"] == 2
+
+
+def serve_with(db, refresher):
+    import sys
+    server = make_server(db, "127.0.0.1", 0, refresher, questionnaires_command=[sys.executable, "-c", "import sys; print(' '.join(sys.argv[1:]))"])
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def test_questionnaire_submit_saves_answers_and_starts_the_submit_run(tmp_path):
+    import sys
+    from dashboard.server import Refresher
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    row_id = add_questionnaire(conn)
+    refresher = Refresher([sys.executable, "-c", "print('refresh')"], tmp_path)
+    server, base = serve_with(db, refresher)
+    try:
+        response = httpx.post(f"{base}/questionnaires/{row_id}/submit", data={"a_1": "GPT-4", "a_2": "A RAG bot", "action": "submit"})
+        assert response.status_code == 303 and response.headers["location"] == "/?view=questionnaires"
+    finally:
+        server.shutdown()
+        server.server_close()
+    refresher.wait()
+    assert json.loads(conn.execute("SELECT answers FROM questionnaires").fetchone()[0]) == {"1": "GPT-4", "2": "A RAG bot"}
+    assert refresher.status()["last"] == f"--submit {row_id}"
+
+
+def test_questionnaire_save_or_blank_submit_does_not_start_a_run(tmp_path):
+    import sys
+    from dashboard.server import Refresher
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    row_id = add_questionnaire(conn)
+    refresher = Refresher([sys.executable, "-c", "print('refresh')"], tmp_path)
+    server, base = serve_with(db, refresher)
+    try:
+        httpx.post(f"{base}/questionnaires/{row_id}/submit", data={"a_1": "GPT-4", "a_2": "", "action": "save"})
+        httpx.post(f"{base}/questionnaires/{row_id}/submit", data={"a_1": "GPT-4", "a_2": " ", "action": "submit"})
+        assert httpx.post(f"{base}/questionnaires/999/submit", data={"action": "save"}).status_code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+    row = conn.execute("SELECT answers, reason, status FROM questionnaires").fetchone()
+    assert json.loads(row["answers"]) == {"1": "GPT-4", "2": ""}
+    assert row["reason"] == "answer every required question first" and row["status"] == "draft"
+    assert refresher.status() == {"running": False, "started_at": "", "last": ""}
+
+
+def test_questionnaire_results_are_described_in_words():
+    from dashboard.server import describe_refresh
+    assert describe_refresh('{"questionnaires_new": 3, "to_review": 1, "already_sent": 1, "open_yourself": 1, "drafted": 1}') == "3 new questionnaires · 1 drafted for your review · 1 already sent · 1 to open yourself"
+    assert describe_refresh('{"questionnaire_submit": "submitted", "job_title": "Acme - SDE 2"}') == "Acme - SDE 2: questionnaire submitted"
+    assert describe_refresh('{"questionnaire_submit": "unconfirmed", "job_title": "Acme"}') == "Acme: clicked Submit but Instahyre did not confirm — open it to check"

@@ -62,6 +62,8 @@ uv run jobagent apply            # submit ready jobs (needs live: true)
 uv run jobagent instahyre        # read Instahyre matches (sign in once in the window that opens)
 uv run jobagent referrals        # draft referral messages
 uv run jobagent manual-refresh   # hide LinkedIn/Naukri jobs you applied to (from confirmation emails) or that expired
+uv run jobagent questionnaires   # read Instahyre inbox questionnaires and draft answers for review (submits nothing)
+uv run jobagent questionnaires --submit <id>   # submit one reviewed draft (the dashboard Questionnaires tab does this)
 uv run jobagent dashboard        # http://127.0.0.1:8777
 uv run jobagent check-companies  # verify every board responds
 ```

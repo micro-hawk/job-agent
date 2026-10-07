@@ -80,6 +80,10 @@
       form.addEventListener("submit", () => session.set("toast", form.dataset.toast));
     });
 
+    document.querySelectorAll("button[data-confirm]").forEach(button => {
+      button.addEventListener("click", event => { if (!confirm(button.dataset.confirm)) event.preventDefault(); });
+    });
+
     const toggle = document.querySelector("[data-theme-toggle]");
     if (toggle) toggle.addEventListener("click", () => {
       const next = root.dataset.theme === "dark" ? "light" : "dark";

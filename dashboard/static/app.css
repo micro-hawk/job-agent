@@ -340,6 +340,11 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 .draft-label { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
 .draft { white-space: pre-wrap; font-size: 13px; }
 .copy { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 7px; padding: 2px 8px; font-size: 11.5px; text-transform: none; letter-spacing: 0; }
+.qform { display: grid; gap: 10px; margin-top: 14px; }
+.qform textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+.qform .draft-label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--fg); gap: 8px; }
+.qactions { display: flex; gap: 8px; justify-content: flex-end; }
+.tag.warn { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
 .copy.done { color: var(--green); border-color: var(--green); }
 
 /* ---------- toasts ---------- */

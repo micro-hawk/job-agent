@@ -1,0 +1,65 @@
+{% from "_icons.html" import icon %}
+{% if refresh.running %}
+<div class="banner live">
+  <span class="pulse"></span>
+  <div>
+    <b>Working on Instahyre since {{ refresh.started_at[11:16] }}…</b>
+    <p>Reading your inbox or submitting a questionnaire. This page reloads every 10 seconds.</p>
+  </div>
+</div>
+{% else %}
+<div class="actions">
+  <form method="post" action="/questionnaires/fetch" class="action" data-toast="Checking your Instahyre inbox for questionnaires…">
+    <button type="submit" title="Reads your Instahyre inbox and drafts answers from your profile. Nothing is submitted until you click Submit on a draft.">
+      <span class="action-icon">{{ icon('inbox', 20) }}</span>
+      <span><b>Check inbox</b><small>Finds new questionnaires and drafts answers for you to review. Nothing is sent.</small></span>
+    </button>
+  </form>
+</div>
+{% if refresh.last %}
+<div class="banner {{ 'bad' if 'stopped' in refresh.last or 'could not' in refresh.last or 'not found' in refresh.last else 'ok' }}">
+  {{ icon('clock', 18) }}
+  <div><b>Last Instahyre run at {{ refresh.started_at[11:16] }}</b><p>{{ refresh.last | describe }}</p></div>
+</div>
+{% endif %}
+{% endif %}
+<div class="referrals">
+  {% for q in questionnaires %}
+  <article class="referral{{ ' sent' if q.status in ('sent', 'submitted') else '' }}">
+    <header>
+      <div class="avatar" style="--hue: {{ q.job_title | hue }}">{{ q.job_title[:1] | upper }}</div>
+      <div class="ref-head">
+        <b>{{ q.job_title }}</b>
+        <div class="muted">{{ q.questions | length }} question{{ '' if q.questions | length == 1 else 's' }}</div>
+      </div>
+      <a class="btn small" href="{{ q.url }}" target="_blank" rel="noopener noreferrer">{{ icon('external', 14) }} Open on Instahyre</a>
+      {% if q.status == 'submitted' %}<span class="tag done">✓ submitted {{ (q.submitted_at or '')[:10] }}</span>
+      {% elif q.status == 'sent' %}<span class="tag done">✓ already sent</span>
+      {% elif q.status == 'manual' %}<span class="tag">open it yourself: has choice or rating questions</span>{% endif %}
+    </header>
+    {% if q.status == 'draft' %}
+    {% if q.reason %}<div class="banner bad">{{ icon('alert', 18) }}<div><p>{{ q.reason }}</p></div></div>{% endif %}
+    <form method="post" action="/questionnaires/{{ q.id }}/submit" class="qform">
+      {% for question in q.questions %}
+      {% set answer = q.answers.get(question.id | string, '') %}
+      <label class="draft-box">
+        <span class="draft-label">{{ question.text }}{% if question.required %} *{% endif %}
+          {% if question.required and not answer %}<span class="tag warn">Needs your answer</span>{% endif %}</span>
+        <textarea name="a_{{ question.id }}" rows="3">{{ answer }}</textarea>
+      </label>
+      {% endfor %}
+      <div class="qactions">
+        <button type="submit" name="action" value="save" class="btn small">Save</button>
+        <button type="submit" name="action" value="submit" class="btn small primary" data-confirm="Submit these answers to Instahyre?">{{ icon('send', 14) }} Submit</button>
+      </div>
+    </form>
+    {% endif %}
+  </article>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">{{ icon('inbox', 28) }}</div>
+    <b>No questionnaires yet</b>
+    <p class="muted">Click <b>Check inbox</b> to look for questionnaires recruiters sent you on Instahyre.</p>
+  </div>
+  {% endfor %}
+</div>

@@ -78,6 +78,20 @@ CREATE TABLE IF NOT EXISTS referrals (
     created_at TEXT NOT NULL,
     sent_at TEXT
 );
+CREATE TABLE IF NOT EXISTS questionnaires (
+    id INTEGER PRIMARY KEY,
+    questionnaire_id TEXT NOT NULL,
+    opportunity_id TEXT NOT NULL,
+    job_title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    questions TEXT NOT NULL DEFAULT '[]',
+    answers TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    submitted_at TEXT,
+    UNIQUE (questionnaire_id, opportunity_id)
+);
 CREATE TABLE IF NOT EXISTS seen_emails (
     message_id TEXT PRIMARY KEY,
     sender TEXT NOT NULL,

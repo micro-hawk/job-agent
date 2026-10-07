@@ -12,6 +12,7 @@ from agent.discover.alerts_email import ingest_alerts
 from agent.discover.ats import FETCH_ERRORS, discover_ats, fetch_company
 from agent.filter import run_filters
 from agent.llm import LLM
+from agent.apply.answers import answer_brief
 from agent.profile import load_profile, load_resume, profile_brief
 from agent.score import run_scoring
 
@@ -157,6 +158,70 @@ def manual_refresh_command(conn, settings: dict, password: str, today, fetch=Non
     return 0
 
 
+QUESTIONNAIRE_PAUSE_MS = 800
+
+
+def _instahyre_browser(page):
+    from agent.discover.instahyre import InstahyreBlocked, blocked_reason
+
+    def get_json(url: str) -> dict:
+        page.wait_for_timeout(QUESTIONNAIRE_PAUSE_MS)
+        data = page.evaluate("url => fetch(url, {credentials: 'include'}).then(r => r.ok ? r.json() : null)", url)
+        if not isinstance(data, dict):
+            raise InstahyreBlocked("Instahyre refused the request")
+        return data
+
+    def page_text(url: str) -> str:
+        page.goto(url, wait_until="domcontentloaded")
+        page.wait_for_timeout(5000)
+        text = page.inner_text("body")
+        reason = blocked_reason(page.url, text)
+        if reason:
+            raise InstahyreBlocked(reason)
+        return text
+
+    return get_json, page_text
+
+
+def questionnaires_command(settings: dict, submit_id: int | None = None) -> int:
+    from playwright.sync_api import sync_playwright
+
+    from agent.discover.instahyre import PROFILE_DIR_NAME, InstahyreBlocked, _open
+    from agent.questionnaire import answer_facts, collect_questionnaires, draft_pending, fill_and_submit, record_submit
+
+    conn = connect(DB_PATH)
+    row = None
+    if submit_id is not None:
+        row = conn.execute("SELECT * FROM questionnaires WHERE id=? AND status='draft'", (submit_id,)).fetchone()
+        if row is None:
+            print(json.dumps({"questionnaire_submit": "not found or not a draft"}))
+            return 1
+    with sync_playwright() as playwright:
+        try:
+            context, page = _open(playwright, DATA_DIR / PROFILE_DIR_NAME)
+        except InstahyreBlocked as exc:
+            print(f"instahyre: stopped, {exc}")
+            return 1
+        try:
+            if row is not None:
+                outcome = fill_and_submit(page, row["url"], json.loads(row["questions"]), json.loads(row["answers"]))
+                record_submit(conn, row["id"], outcome, _stamp(datetime.now()))
+                print(json.dumps({"questionnaire_submit": outcome, "job_title": row["job_title"]}))
+                return 0 if outcome in ("submitted", "already") else 1
+            stats = collect_questionnaires(*_instahyre_browser(page), conn, _stamp(datetime.now()))
+        except InstahyreBlocked as exc:
+            print(f"instahyre: stopped, {exc}")
+            return 1
+        finally:
+            context.close()
+    llm = LLM(conn, settings["daily_budget_usd"])
+    profile = load_profile()
+    facts = answer_facts(profile, datetime.now().date())
+    stats["drafted"] = draft_pending(conn, llm, settings["models"].get("questionnaire", "sonnet"), answer_brief(profile, load_resume()), facts)
+    print(json.dumps(stats))
+    return 0
+
+
 def referrals_command(settings: dict) -> int:
     from agent.referrals import build_referrals
 
@@ -184,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
     instahyre.add_argument("--apply", action="store_true", help="open each job in the Instahyre tab and click Apply")
     instahyre.add_argument("--limit", type=int, default=40)
     commands.add_parser("manual-refresh", help="remove Manual 1-click jobs you applied to (from confirmation emails) or that expired")
+    questionnaires = commands.add_parser("questionnaires", help="draft answers to Instahyre questionnaires in your inbox, or submit one")
+    questionnaires.add_argument("--submit", type=int, help="submit the reviewed questionnaire with this dashboard id")
     commands.add_parser("referrals", help="draft LinkedIn referral messages for India target companies")
     args = parser.parse_args(argv)
 
@@ -204,6 +271,8 @@ def main(argv: list[str] | None = None) -> int:
         return instahyre_command(settings, args.applied)
     if args.command == "referrals":
         return referrals_command(settings)
+    if args.command == "questionnaires":
+        return questionnaires_command(settings, args.submit)
     if args.command == "manual-refresh":
         return manual_refresh_command(connect(DB_PATH), settings, os.environ.get("GMAIL_APP_PASSWORD") or "", datetime.now().date())
     companies = load_companies()

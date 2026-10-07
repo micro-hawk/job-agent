@@ -14,6 +14,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from agent.db import connect, update_job
 from agent.models import ALERT_SOURCES
+from agent.questionnaire import REASONS
 
 TEMPLATES = Path(__file__).parent / "templates"
 STATIC = Path(__file__).parent / "static"
@@ -24,6 +25,7 @@ INSTAHYRE_COMMAND = [sys.executable, "-m", "agent.run", "instahyre"]
 INSTAHYRE_APPLIED_COMMAND = INSTAHYRE_COMMAND + ["--applied"]
 INSTAHYRE_APPLY_COMMAND = INSTAHYRE_COMMAND + ["--apply"]
 MANUAL_REFRESH_COMMAND = [sys.executable, "-m", "agent.run", "manual-refresh"]
+QUESTIONNAIRES_COMMAND = [sys.executable, "-m", "agent.run", "questionnaires"]
 IDLE = {"running": False, "started_at": "", "last": ""}
 ROW_LIMIT = 300
 VIEWS = {
@@ -118,6 +120,13 @@ def describe_refresh(last: str) -> str:
         result = json.loads(last)
     except ValueError:
         return last
+    if "questionnaire_submit" in result:
+        outcome = result["questionnaire_submit"]
+        words = {"submitted": "questionnaire submitted", "already": "questionnaire was already sent"}
+        return f"{result['job_title']}: {words.get(outcome) or REASONS.get(outcome, outcome)}"
+    if "questionnaires_new" in result:
+        return (f"{result['questionnaires_new']} new questionnaires · {result.get('drafted', 0)} drafted for your review · "
+                f"{result['already_sent']} already sent · {result['open_yourself']} to open yourself")
     if "linkedin_applied" in result:
         applied = result["linkedin_applied"] + result["naukri_applied"]
         return f"{applied} applied ({result['linkedin_applied']} LinkedIn, {result['naukri_applied']} Naukri) · {result['expired']} expired"
@@ -190,7 +199,7 @@ def _daily_applied(conn: sqlite3.Connection, today: date) -> list[dict]:
 
 
 def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None) -> dict:
-    view = view if view in VIEWS or view == "referrals" else "today"
+    view = view if view in VIEWS or view in ("referrals", "questionnaires") else "today"
     counts = {row["status"]: row["n"] for row in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     spend = conn.execute(
         "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COUNT(*) AS calls FROM llm_calls WHERE substr(ts, 1, 10)=?", (today.isoformat(),)
@@ -211,21 +220,29 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
         jobs = [dict(row) | {"detail": json.loads(row["score_detail"]) if row["score_detail"] else None} for row in rows]
     nav_counts = {key: _view_count(conn, value[1], value[3]) for key, value in VIEWS.items()}
     nav_counts["referrals"] = conn.execute("SELECT COUNT(*) FROM referrals WHERE status='todo'").fetchone()[0]
+    nav_counts["questionnaires"] = conn.execute("SELECT COUNT(*) FROM questionnaires WHERE status IN ('draft', 'manual')").fetchone()[0]
     daily = _daily_applied(conn, today)
     referrals = []
     if view == "referrals":
         referrals = [dict(row) for row in conn.execute(
             "SELECT r.*, j.title, j.url FROM referrals r JOIN jobs j ON j.id = r.job_id ORDER BY r.status = 'sent', r.company"
         )]
+    questionnaires = []
+    if view == "questionnaires":
+        questionnaires = [
+            dict(row) | {"questions": json.loads(row["questions"]), "answers": json.loads(row["answers"])}
+            for row in conn.execute("SELECT * FROM questionnaires ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'manual' THEN 1 ELSE 2 END, id DESC")
+        ]
     return {
         "view": view,
-        "views": {key: value[0] for key, value in VIEWS.items()} | {"referrals": "Referrals"},
+        "views": {key: value[0] for key, value in VIEWS.items()} | {"referrals": "Referrals", "questionnaires": "Questionnaires"},
         "statuses": STATUS_ORDER,
         "counts": counts,
         "spend": dict(spend),
         "runs": runs,
         "jobs": jobs,
         "referrals": referrals,
+        "questionnaires": questionnaires,
         "nav_counts": nav_counts,
         "daily": daily,
         "daily_max": max([day["n"] for day in daily] + [1]),
@@ -255,7 +272,20 @@ def mark_referral_sent(conn: sqlite3.Connection, referral_id: int, now: str) -> 
     return cursor.rowcount == 1
 
 
-def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None) -> ThreadingHTTPServer:
+def save_questionnaire_answers(conn: sqlite3.Connection, row_id: int, form: dict, submit: bool) -> bool | None:
+    row = conn.execute("SELECT questions FROM questionnaires WHERE id=? AND status='draft'", (row_id,)).fetchone()
+    if not row:
+        return None
+    questions = json.loads(row["questions"])
+    answers = {str(question["id"]): form.get(f"a_{question['id']}", [""])[0].strip() for question in questions}
+    complete = all(answers[str(question["id"])].strip() for question in questions if question["required"])
+    reason = REASONS["blank"] if submit and not complete else ""
+    conn.execute("UPDATE questionnaires SET answers=?, reason=? WHERE id=?", (json.dumps(answers), reason, row_id))
+    conn.commit()
+    return submit and complete
+
+
+def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None, questionnaires_command: list[str] = QUESTIONNAIRES_COMMAND) -> ThreadingHTTPServer:
     refresher = refresher or Refresher(INSTAHYRE_COMMAND, PROJECT_ROOT)
     manual_refresher = manual_refresher or Refresher(MANUAL_REFRESH_COMMAND, PROJECT_ROOT)
     instahyre_actions = {"refresh": None, "applied": applied_command, "apply": apply_command}
@@ -268,6 +298,25 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                 self.send_response(303)
                 self.send_header("Location", "/?view=manual")
                 self.end_headers()
+                return
+            if parts == ["questionnaires", "fetch"]:
+                refresher.start(questionnaires_command)
+                self.redirect("/?view=questionnaires")
+                return
+            if len(parts) == 3 and parts[0] == "questionnaires" and parts[1].isdigit() and parts[2] == "submit":
+                length = int(self.headers.get("Content-Length") or 0)
+                form = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
+                conn = connect(db_path)
+                try:
+                    ready = save_questionnaire_answers(conn, int(parts[1]), form, form.get("action", [""])[0] == "submit")
+                finally:
+                    conn.close()
+                if ready is None:
+                    self.send_error(404)
+                    return
+                if ready:
+                    refresher.start(questionnaires_command + ["--submit", parts[1]])
+                self.redirect("/?view=questionnaires")
                 return
             if parts == ["instahyre", "stop"]:
                 refresher.stop()
@@ -296,6 +345,11 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                 return
             self.send_response(303)
             self.send_header("Location", self.headers.get("Referer") or "/?view=instahyre")
+            self.end_headers()
+
+        def redirect(self, location: str) -> None:
+            self.send_response(303)
+            self.send_header("Location", location)
             self.end_headers()
 
         def send_static(self, name: str) -> None:
