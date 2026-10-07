@@ -1,3 +1,7 @@
+import httpx
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+
 from agent.apply.runner import run_applications
 from agent.db import update_job, upsert_job
 from agent.models import Job
@@ -130,3 +134,50 @@ def test_total_cap_skips_exempt_markets(conn, tmp_path):
     add(conn, "3", "A", 70)
     run(conn, Driver(), tmp_path, settings=SETTINGS | {"per_company_total_cap": 2, "total_cap_exempt_markets": ["india"]})
     assert statuses(conn)["2"] == "applied" and statuses(conn)["3"] == "ready"
+
+
+def test_network_error_keeps_job_ready_for_retry(conn, tmp_path):
+    add(conn, "1", "A", 90)
+
+    def offline(job, app_dir, submit):
+        raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+
+    stats, _ = run(conn, offline, tmp_path)
+    assert statuses(conn) == {"1": "ready"}
+    assert stats["error"] == 1
+    assert tuple(conn.execute("SELECT status, reason FROM applications").fetchone()) == ("error", "ConnectError: [Errno 8] nodename nor servname provided, or not known")
+
+
+def test_page_timeout_keeps_job_ready_for_retry(conn, tmp_path):
+    add(conn, "1", "A", 90)
+
+    def slow(job, app_dir, submit):
+        raise PlaywrightTimeoutError("Page.goto: Timeout 60000ms exceeded.")
+
+    run(conn, slow, tmp_path)
+    assert statuses(conn) == {"1": "ready"}
+
+
+def test_job_fails_after_repeated_network_errors(conn, tmp_path):
+    add(conn, "1", "A", 90)
+
+    def offline(job, app_dir, submit):
+        raise httpx.ReadTimeout("The read operation timed out")
+
+    for _ in range(2):
+        run(conn, offline, tmp_path)
+    assert statuses(conn) == {"1": "ready"}
+    run(conn, offline, tmp_path)
+    assert tuple(conn.execute("SELECT status, reason FROM jobs").fetchone()) == ("failed", "ReadTimeout: The read operation timed out")
+
+
+def test_network_errors_count_toward_halting(conn, tmp_path):
+    for i in range(5):
+        add(conn, str(i), f"C{i}", 90 - i)
+
+    def offline(job, app_dir, submit):
+        raise httpx.ConnectError("offline")
+
+    stats, _ = run(conn, offline, tmp_path)
+    assert stats["error"] == 3
+    assert stats["halted"] == "3 consecutive failures"

@@ -2,11 +2,14 @@ import json
 from datetime import date
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 from agent.apply.answers import answer_fields
 from agent.apply.browser import EMBED_URL, current_employment, fill_form, submit, unfilled_required
 from agent.apply.form import parse_greenhouse_form
 
 FORM_URL = "https://boards-api.greenhouse.io/v1/boards/{token}/jobs/{job_id}?questions=true"
+FORM_READY = "#first_name"
 
 
 class GreenhouseDriver:
@@ -38,7 +41,12 @@ class GreenhouseDriver:
             return "needs_you", "unanswered required: " + "; ".join(label[:80] for label in missing)
         page = self.browser.new_page(viewport={"width": 1280, "height": 900})
         try:
-            page.goto(EMBED_URL.format(token=token, job_id=job["external_id"]), wait_until="networkidle", timeout=60000)
+            page.goto(EMBED_URL.format(token=token, job_id=job["external_id"]), wait_until="load", timeout=60000)
+            page.wait_for_selector(FORM_READY, timeout=30000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=15000)
+            except PlaywrightTimeoutError:
+                pass
             problems = fill_form(page, fields, answers, self.profile["location"]["country"], current_employment(self.resume))
             unfilled = unfilled_required(page)
             page.screenshot(path=str(app_dir / "filled.png"), full_page=True)

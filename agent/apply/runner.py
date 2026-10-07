@@ -3,9 +3,22 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx
+from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
+
 from agent.db import update_job
 
 TERMINAL = ("applied", "needs_you", "failed")
+RETRYABLE = (httpx.TransportError, PlaywrightTimeoutError)
+MAX_ERRORS = 3
+
+
+def _retryable(exc: Exception) -> bool:
+    return isinstance(exc, RETRYABLE) or (isinstance(exc, PlaywrightError) and "net::ERR_" in str(exc))
+
+
+def _errors(conn: sqlite3.Connection, job_id: int) -> int:
+    return conn.execute("SELECT COUNT(*) FROM applications WHERE job_id = ? AND status = 'error'", (job_id,)).fetchone()[0]
 
 
 def _record(conn: sqlite3.Connection, job_id: int, ts: str, mode: str, status: str, reason: str, app_dir: Path) -> None:
@@ -69,16 +82,19 @@ def run_applications(conn: sqlite3.Connection, settings: dict, drivers: dict[str
         try:
             status, reason = drivers[job["source"]](job, app_dir, not dry_run)
         except Exception as exc:
-            status, reason = "failed", f"{exc.__class__.__name__}: {str(exc)[:200]}"
+            status = "error" if _retryable(exc) else "failed"
+            reason = f"{exc.__class__.__name__}: {str(exc)[:200]}"
         stats[status] += 1
         _record(conn, job["id"], now(), mode, status, reason, app_dir)
-        if not dry_run and status in TERMINAL:
+        if not dry_run and status == "error" and _errors(conn, job["id"]) >= MAX_ERRORS:
+            update_job(conn, job["id"], status="failed", reason=reason)
+        elif not dry_run and status in TERMINAL:
             update_job(conn, job["id"], status=status, reason=reason)
         if status == "applied":
             per_company[job["company"]] += 1
             ever[job["company"]] += 1
             total += 1
-        failures = failures + 1 if status == "failed" else 0
+        failures = failures + 1 if status in ("failed", "error") else 0
         if failures >= settings.get("max_consecutive_failures", 3):
             halted = f"{failures} consecutive failures"
             break
