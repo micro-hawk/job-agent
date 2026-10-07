@@ -1,59 +1,98 @@
 {% from "_icons.html" import icon %}
 {% set latest = ats_checks[0] if ats_checks else None %}
+{% macro band(score) -%}{{ 'good' if score >= 75 else 'mid' if score >= 55 else 'low' }}{%- endmacro %}
 {% if ats_error %}
 <div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not score that resume</b><p>{{ ats_error }}</p></div></div>
 {% endif %}
 <div class="ats">
-  <form method="post" action="/ats/check" enctype="multipart/form-data" class="card ats-form" data-busy>
-    <h3>Check a resume</h3>
-    <label class="field"><span>Resume (PDF or DOCX, up to 5 MB)</span>
-      <input type="file" name="resume" accept=".pdf,.docx" required>
+  <form method="post" action="/ats/check" enctype="multipart/form-data" class="card ats-form" data-ats-form>
+    <div class="ats-step"><span>1</span> Upload your resume</div>
+    <label class="dropzone" data-dropzone>
+      <input type="file" name="resume" accept=".pdf,.docx" required data-max="{{ 5 * 1024 * 1024 }}">
+      <span class="dz-icon">{{ icon('upload', 22) }}</span>
+      <span class="dz-empty"><b>Drop your resume here</b><small>or <u>browse</u> · PDF or DOCX, up to 5 MB</small></span>
+      <span class="dz-file">{{ icon('file', 18) }}<b data-file-name></b><small data-file-size></small></span>
     </label>
-    <label class="field"><span>Experience level</span>
-      <select name="level" required>
-        {% for key, label in ats_levels.items() %}<option value="{{ key }}"{{ ' selected' if latest and latest.level == key else '' }}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="field"><span>Job description <small class="muted">(optional, adds a keyword match)</small></span>
-      <textarea name="jd" rows="6" placeholder="Paste the job description to see which of its keywords your resume misses"></textarea>
-    </label>
-    <button type="submit" class="btn primary" data-busy-text="Scoring… about 15 seconds">{{ icon('gauge', 15) }} Check score</button>
-    <p class="muted small-print">The file is read in memory and never saved. Only the score and feedback are kept.</p>
+    <p class="field-error" data-file-error hidden></p>
+
+    <div class="ats-step"><span>2</span> Your experience level</div>
+    <div class="levels">
+      {% for key, label in ats_levels.items() %}
+      {% set name, years = label.split(' (') %}
+      <label class="level">
+        <input type="radio" name="level" value="{{ key }}"{{ ' checked' if latest and latest.level == key else '' }} required>
+        <span><b>{{ name }}</b><small>{{ years.rstrip(')') }}</small></span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <div class="ats-step"><span>3</span> Job description <em>optional</em></div>
+    <textarea name="jd" rows="5" class="jd" placeholder="Paste a job description to check which of its keywords your resume is missing"></textarea>
+
+    <button type="submit" class="btn primary ats-go">{{ icon('gauge', 16) }} Check score</button>
+    <p class="small-print">{{ icon('eye-off', 13) }} Read in memory and never saved. Only the score and feedback are kept.</p>
   </form>
 
   {% if latest %}
   {% set r = latest.result %}
   <section class="card ats-result">
     <div class="ats-head">
-      <div class="ats-score {{ 'good' if r.score >= 75 else 'mid' if r.score >= 55 else 'low' }}"><b>{{ r.score }}</b><small>/ 100</small></div>
-      <div>
-        <b>{{ latest.filename }}</b>
-        <div class="muted">{{ latest.level_label }} · {{ 'against the job description' if r.with_jd else 'no job description' }} · {{ latest.created_at[:16] | replace('T', ' ') }}</div>
+      <div class="ring {{ band(r.score) }}" style="--score: {{ r.score }}">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"/>
+          <circle class="ring-fill" cx="60" cy="60" r="52" pathLength="100"/>
+        </svg>
+        <div class="ring-label"><b data-count="{{ r.score }}">{{ r.score }}</b><small>ATS score</small></div>
+      </div>
+      <div class="ats-summary">
+        <span class="verdict {{ band(r.score) }}">{{ 'Strong match' if r.score >= 75 else 'Good, with gaps' if r.score >= 55 else 'Needs work' }}</span>
+        <b class="ats-file">{{ icon('file', 15) }} {{ latest.filename }}</b>
+        <div class="muted">{{ latest.level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
+        <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
       </div>
     </div>
+
     {% set bars = [('Parsing', r.parse_score)] + ([('Keywords', r.keyword_score)] if r.keyword_score is not none else []) + [('Content', r.content_score), ('Impact', r.ratings.impact), ('Seniority', r.ratings.seniority), ('Clarity', r.ratings.clarity)] %}
     <div class="ats-bars">
       {% for name, value in bars %}
-      <div class="ats-bar"><span>{{ name }}</span><div class="track"><i style="width: {{ value }}%"></i></div><b>{{ value }}</b></div>
+      <div class="ats-bar" style="--i: {{ loop.index0 }}"><span>{{ name }}</span><div class="track"><i class="{{ band(value) }}" style="--w: {{ value }}%"></i></div><b>{{ value }}</b></div>
       {% endfor %}
     </div>
-    {% set failed = r.checks | rejectattr('ok') | list %}
-    <h3>Parse checks</h3>
-    <ul class="ats-checks">
-      {% for check in r.checks %}<li class="{{ 'ok' if check.ok else 'bad' }}">{{ '✓' if check.ok else '✗' }} {{ check.detail }}</li>{% endfor %}
-    </ul>
+
+    <div class="ats-section">
+      <h3>Parse checks</h3>
+      <ul class="ats-checks">
+        {% for check in r.checks %}<li class="{{ 'ok' if check.ok else 'bad' }}"><span class="dot">{{ '✓' if check.ok else '!' }}</span>{{ check.detail }}</li>{% endfor %}
+      </ul>
+    </div>
+
     {% if r.missing_keywords or r.matched_keywords %}
-    <h3>Keywords</h3>
-    <div class="tags">
-      {% for keyword in r.missing_keywords %}<span class="tag warn">missing: {{ keyword }}</span>{% endfor %}
-      {% for keyword in r.matched_keywords %}<span class="tag done">{{ keyword }}</span>{% endfor %}
+    <div class="ats-section">
+      <h3>Keywords <small class="muted">{{ r.matched_keywords | length }} of {{ (r.matched_keywords | length) + (r.missing_keywords | length) }} found</small></h3>
+      <div class="tags">
+        {% for keyword in r.missing_keywords %}<span class="tag warn">{{ keyword }}</span>{% endfor %}
+        {% for keyword in r.matched_keywords %}<span class="tag done">✓ {{ keyword }}</span>{% endfor %}
+      </div>
     </div>
     {% endif %}
+
     {% if r.fixes %}
-    <h3>Top fixes</h3>
-    <ol class="ats-fixes">{% for fix in r.fixes %}<li>{{ fix }}</li>{% endfor %}</ol>
+    <div class="ats-section">
+      <h3>Top fixes</h3>
+      <ol class="ats-fixes">{% for fix in r.fixes %}<li style="--i: {{ loop.index0 }}"><span>{{ loop.index }}</span><p>{{ fix }}</p></li>{% endfor %}</ol>
+    </div>
     {% endif %}
+  </section>
+  {% else %}
+  <section class="card ats-placeholder">
+    <div class="ph-ring">{{ icon('gauge', 34) }}</div>
+    <h3>Your score will appear here</h3>
+    <p class="muted">Each resume is checked the way an applicant tracking system reads it, then rated on content.</p>
+    <ul>
+      <li>{{ icon('check', 15) }} Readable text, headings, contact details and dates</li>
+      <li>{{ icon('check', 15) }} Impact, seniority and clarity for your level</li>
+      <li>{{ icon('check', 15) }} Keyword match when you paste a job description</li>
+    </ul>
   </section>
   {% endif %}
 </div>
@@ -61,10 +100,35 @@
 {% if ats_checks | length > 1 %}
 <section class="card ats-history">
   <h3>History</h3>
-  <table>
-    {% for check in ats_checks %}
-    <tr><td>{{ check.filename }}</td><td class="muted">{{ check.level_label }}</td><td><b>{{ check.score }}</b></td><td class="muted">{{ check.created_at[:10] }}</td></tr>
-    {% endfor %}
-  </table>
+  {% for check in ats_checks %}
+  <div class="hist-row">
+    <span class="hist-score {{ band(check.score) }}">{{ check.score }}</span>
+    <span class="hist-name">{{ check.filename }}<small class="muted">{{ check.level_label }}</small></span>
+    <span class="hist-bar"><i class="{{ band(check.score) }}" style="--w: {{ check.score }}%"></i></span>
+    <span class="muted">{{ check.created_at[:10] }}</span>
+  </div>
+  {% endfor %}
 </section>
 {% endif %}
+
+<div class="scoring" data-scoring hidden>
+  <div class="scoring-card">
+    <div class="doc">
+      <div class="doc-head"><i></i><i></i></div>
+      <i></i><i></i><i></i><i class="short"></i>
+      <div class="doc-gap"></div>
+      <i></i><i></i><i class="short"></i>
+      <div class="beam"></div>
+    </div>
+    <h3>Scoring your resume</h3>
+    <ol class="steps" data-steps>
+      <li data-at="0">Extracting text</li>
+      <li data-at="1.5">Checking sections, contact and dates</li>
+      <li data-at="4">Rating impact and seniority</li>
+      <li data-at="8">Matching keywords</li>
+      <li data-at="12">Writing your top fixes</li>
+    </ol>
+    <div class="progress"><i data-progress></i></div>
+    <small class="muted" data-elapsed>Usually about 15 seconds</small>
+  </div>
+</div>

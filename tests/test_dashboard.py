@@ -484,7 +484,7 @@ def test_ats_view_shows_the_form_and_latest_result(conn):
     record_check(conn, "cv.pdf", "mid", ats_result(), NOW)
     html = render(conn, "ats", TODAY)
     assert 'enctype="multipart/form-data"' in html and 'action="/ats/check"' in html
-    assert html.count('<option value="') == 5 and "Senior (5–8 yrs)" in html
+    assert html.count('name="level"') == 5 and 'value="mid" checked' in html and "Senior" in html and "5–8 yrs" in html
     assert "72" in html and "Golang" in html and "Quantify &lt;impact&gt;" in html and "add an email and phone number" in html
     assert "old.pdf" in html and 'href="/?view=ats" class="nav-item on"' in html
 

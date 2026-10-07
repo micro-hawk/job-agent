@@ -69,9 +69,89 @@
     el.textContent = part + " · " + el.textContent;
   }
 
+  function setupAts() {
+    const form = document.querySelector("[data-ats-form]");
+    if (!form) return;
+    const zone = form.querySelector("[data-dropzone]");
+    const input = zone.querySelector("input");
+    const error = form.querySelector("[data-file-error]");
+    const overlay = document.querySelector("[data-scoring]");
+
+    function fileProblem(file) {
+      if (!file) return "Choose a resume to upload.";
+      if (!/\.(pdf|docx)$/i.test(file.name)) return "Upload a PDF or DOCX resume.";
+      if (file.size > Number(input.dataset.max)) return "That file is larger than 5 MB.";
+      return "";
+    }
+
+    function showFile() {
+      const file = input.files[0];
+      const problem = file ? fileProblem(file) : "";
+      zone.classList.toggle("has-file", Boolean(file) && !problem);
+      error.hidden = !problem;
+      error.textContent = problem;
+      if (file && !problem) {
+        form.querySelector("[data-file-name]").textContent = file.name;
+        form.querySelector("[data-file-size]").textContent = (file.size / 1024 < 1024 ? Math.round(file.size / 1024) + " KB" : (file.size / 1048576).toFixed(1) + " MB") + " · click to change";
+      }
+    }
+
+    input.addEventListener("change", showFile);
+    ["dragenter", "dragover"].forEach(name => zone.addEventListener(name, () => zone.classList.add("over")));
+    ["dragleave", "drop"].forEach(name => zone.addEventListener(name, () => zone.classList.remove("over")));
+
+    form.addEventListener("submit", event => {
+      const problem = fileProblem(input.files[0]);
+      if (problem) {
+        event.preventDefault();
+        error.hidden = false;
+        error.textContent = problem;
+        return;
+      }
+      form.querySelector("button[type=submit]").disabled = true;
+      overlay.hidden = false;
+      const steps = Array.from(overlay.querySelectorAll("[data-steps] li"));
+      const bar = overlay.querySelector("[data-progress]");
+      const elapsed = overlay.querySelector("[data-elapsed]");
+      const started = Date.now();
+      (function tick() {
+        const seconds = (Date.now() - started) / 1000;
+        const current = steps.filter(step => Number(step.dataset.at) <= seconds).length - 1;
+        steps.forEach((step, index) => {
+          step.classList.toggle("done", index < current);
+          step.classList.toggle("active", index === current);
+        });
+        bar.style.width = Math.min(95, 95 * (1 - Math.exp(-seconds / 7))) + "%";
+        elapsed.textContent = seconds < 20 ? Math.floor(seconds) + "s · usually about 15 seconds" : Math.floor(seconds) + "s · taking a little longer than usual";
+        setTimeout(tick, 250);
+      })();
+    });
+
+    window.addEventListener("pageshow", event => {
+      if (event.persisted) {
+        overlay.hidden = true;
+        form.querySelector("button[type=submit]").disabled = false;
+      }
+    });
+  }
+
+  function countUp() {
+    document.querySelectorAll("[data-count]").forEach(el => {
+      const target = Number(el.dataset.count);
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const started = performance.now();
+      (function frame(now) {
+        const t = Math.min(1, (now - started) / 1400);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        if (t < 1) requestAnimationFrame(frame);
+      })(started);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupFilters();
     setupGreeting();
+    countUp();
     document.querySelectorAll(".bar-col").forEach((bar, index) => bar.style.setProperty("--i", index));
     document.querySelectorAll(".job").forEach((job, index) => { job.style.animationDelay = Math.min(index, 12) * 25 + "ms"; });
     toast(session.take("toast"));
@@ -89,13 +169,7 @@
       });
     });
 
-    document.querySelectorAll("form[data-busy]").forEach(form => {
-      form.addEventListener("submit", () => {
-        const button = form.querySelector("button[type=submit]");
-        button.disabled = true;
-        button.textContent = button.dataset.busyText;
-      });
-    });
+    setupAts();
 
     document.querySelectorAll("button[data-confirm]").forEach(button => {
       button.addEventListener("click", event => { if (!confirm(button.dataset.confirm)) event.preventDefault(); });
