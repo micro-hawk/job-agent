@@ -6,6 +6,7 @@
   'manual': ('Manual 1-click', 'Jobs from your LinkedIn and Naukri alerts. Open, apply, then mark applied.'),
   'needs': ('Needs you', 'A required question had no truthful automatic answer. Finish these by hand.'),
   'referrals': ('Referrals', 'Warm introductions for your India target companies.'),
+  'ats': ('ATS score', 'Upload a resume and see how an applicant tracking system would rate it.'),
   'questionnaires': ('Instahyre', 'Questionnaires recruiters sent you. Review the drafted answers, then submit.'),
   'applied': ('Applied', 'Every application that went out, newest first.'),
   'pipeline': ('In pipeline', 'Discovered and waiting to be scored.'),
@@ -15,6 +16,7 @@
   ('', [('today', 'home')]),
   ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('needs', 'alert')]),
   ('Network', [('referrals', 'users')]),
+  ('Tools', [('ats', 'gauge')]),
   ('Track', [('applied', 'check'), ('pipeline', 'layers'), ('skipped', 'eye-off')]),
 ] -%}
 <!doctype html>
@@ -61,7 +63,7 @@
         <h1>{{ pages[view][0] }}</h1>
         <p>{{ pages[view][1] }}</p>
       </div>
-      {% if view not in ('today', 'referrals', 'questionnaires') %}
+      {% if view not in ('today', 'referrals', 'questionnaires', 'ats') %}
       <label class="search">{{ icon('search', 16) }}<input type="search" placeholder="Search company, role, city…" data-search-input aria-label="Search"><kbd>/</kbd></label>
       {% endif %}
     </header>
@@ -70,6 +72,8 @@
       {% include "_overview.html" %}
     {% elif view == 'referrals' %}
       {% include "_referrals.html" %}
+    {% elif view == 'ats' %}
+      {% include "_ats.html" %}
     {% elif view == 'questionnaires' %}
       {% include "_instahyre_tabs.html" %}
       {% include "_questionnaires.html" %}

@@ -390,3 +390,29 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.ats { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .ats { grid-template-columns: 1fr; } }
+.ats-form { display: flex; flex-direction: column; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.field input, .field select, .field textarea { font: inherit; font-weight: 400; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: inherit; }
+.small-print { font-size: 12px; margin: 0; }
+.ats-head { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; }
+.ats-score { width: 92px; height: 92px; border-radius: 50%; display: grid; place-content: center; text-align: center; border: 6px solid var(--line); }
+.ats-score b { font-size: 30px; line-height: 1; }
+.ats-score small { color: var(--muted); }
+.ats-score.good { border-color: var(--green); }
+.ats-score.mid { border-color: var(--accent); }
+.ats-score.low { border-color: var(--bad); }
+.ats-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.ats-bar { display: grid; grid-template-columns: 80px 1fr 32px; gap: 10px; align-items: center; font-size: 13px; }
+.ats-bar .track { height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.ats-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 99px; }
+.ats-bar b { text-align: right; }
+.ats-result h3 { margin-top: 16px; }
+.ats-checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ats-checks .ok { color: var(--green); }
+.ats-checks .bad { color: var(--bad); }
+.ats-fixes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.ats-history { margin-top: 16px; }
+.ats-history table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ats-history td { padding: 6px 8px; border-top: 1px solid var(--line); }

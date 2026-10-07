@@ -6,13 +6,18 @@ import subprocess
 import sys
 import threading
 from datetime import date, datetime, timedelta
+from email.parser import BytesParser
+from email.policy import HTTP
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, extract_text, recent_checks, record_check, score_resume
+from agent.config import load_settings
 from agent.db import connect, update_job
+from agent.llm import LLM, LLMError
 from agent.models import ALERT_SOURCES
 from agent.questionnaire import REASONS
 
@@ -26,6 +31,7 @@ INSTAHYRE_APPLIED_COMMAND = INSTAHYRE_COMMAND + ["--applied"]
 INSTAHYRE_APPLY_COMMAND = INSTAHYRE_COMMAND + ["--apply"]
 MANUAL_REFRESH_COMMAND = [sys.executable, "-m", "agent.run", "manual-refresh"]
 QUESTIONNAIRES_COMMAND = [sys.executable, "-m", "agent.run", "questionnaires"]
+UPLOAD_OVERHEAD_BYTES = 1024 * 1024
 IDLE = {"running": False, "started_at": "", "last": ""}
 ROW_LIMIT = 300
 VIEWS = {
@@ -198,8 +204,8 @@ def _daily_applied(conn: sqlite3.Connection, today: date) -> list[dict]:
     return [{"day": day.isoformat(), "label": str(day.day), "n": per_day.get(day.isoformat(), 0)} for day in days]
 
 
-def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None) -> dict:
-    view = view if view in VIEWS or view in ("referrals", "questionnaires") else "today"
+def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "") -> dict:
+    view = view if view in VIEWS or view in ("referrals", "questionnaires", "ats") else "today"
     counts = {row["status"]: row["n"] for row in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     spend = conn.execute(
         "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COUNT(*) AS calls FROM llm_calls WHERE substr(ts, 1, 10)=?", (today.isoformat(),)
@@ -243,6 +249,9 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
         "jobs": jobs,
         "referrals": referrals,
         "questionnaires": questionnaires,
+        "ats_checks": recent_checks(conn) if view == "ats" else [],
+        "ats_levels": {key: value[0] for key, value in LEVELS.items()},
+        "ats_error": ats_error,
         "nav_counts": nav_counts,
         "daily": daily,
         "daily_max": max([day["n"] for day in daily] + [1]),
@@ -253,8 +262,8 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
     }
 
 
-def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None) -> str:
-    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh))
+def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "") -> str:
+    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh, ats_error))
 
 
 def mark_applied(conn: sqlite3.Connection, job_id: int) -> bool:
@@ -285,9 +294,44 @@ def save_questionnaire_answers(conn: sqlite3.Connection, row_id: int, form: dict
     return submit and complete
 
 
-def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None, questionnaires_command: list[str] = QUESTIONNAIRES_COMMAND) -> ThreadingHTTPServer:
+def parse_multipart(content_type: str, body: bytes) -> dict[str, tuple[str | None, bytes]]:
+    message = BytesParser(policy=HTTP).parsebytes(b"Content-Type: " + content_type.encode("latin-1") + b"\r\n\r\n" + body)
+    if not message.is_multipart():
+        return {}
+    fields = {}
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if name:
+            fields[name] = (part.get_filename(), part.get_payload(decode=True) or b"")
+    return fields
+
+
+def check_resume(conn: sqlite3.Connection, fields: dict, llm, model: str, now: str) -> str:
+    level = (fields.get("level") or (None, b""))[1].decode("utf-8", "replace")
+    filename, data = fields.get("resume") or (None, b"")
+    jd = (fields.get("jd") or (None, b""))[1].decode("utf-8", "replace")
+    if level not in LEVELS:
+        return "choose an experience level"
+    if not filename:
+        return "choose a resume file to upload"
+    if len(data) > MAX_UPLOAD_BYTES:
+        return "that file is larger than 5 MB"
+    try:
+        text, pages = extract_text(filename, data)
+        result = score_resume(text, pages, level, jd, llm, model)
+    except AtsInputError as exc:
+        return str(exc)
+    except LLMError as exc:
+        return f"scoring failed: {exc}"
+    record_check(conn, Path(filename).name, level, result, now)
+    return ""
+
+
+def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None, questionnaires_command: list[str] = QUESTIONNAIRES_COMMAND, llm_factory=None, ats_model: str = "sonnet") -> ThreadingHTTPServer:
     refresher = refresher or Refresher(INSTAHYRE_COMMAND, PROJECT_ROOT)
     manual_refresher = manual_refresher or Refresher(MANUAL_REFRESH_COMMAND, PROJECT_ROOT)
+    llm_factory = llm_factory or (lambda conn: LLM(conn, load_settings()["daily_budget_usd"]))
+    ats_state = {"error": ""}
     instahyre_actions = {"refresh": None, "applied": applied_command, "apply": apply_command}
 
     class Handler(BaseHTTPRequestHandler):
@@ -298,6 +342,20 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                 self.send_response(303)
                 self.send_header("Location", "/?view=manual")
                 self.end_headers()
+                return
+            if parts == ["ats", "check"]:
+                length = int(self.headers.get("Content-Length") or 0)
+                if length > MAX_UPLOAD_BYTES + UPLOAD_OVERHEAD_BYTES:
+                    ats_state["error"] = "that file is larger than 5 MB"
+                    self.close_connection = True
+                else:
+                    fields = parse_multipart(self.headers.get("Content-Type") or "", self.rfile.read(length))
+                    conn = connect(db_path)
+                    try:
+                        ats_state["error"] = check_resume(conn, fields, llm_factory(conn), ats_model, datetime.now().isoformat(timespec="seconds"))
+                    finally:
+                        conn.close()
+                self.redirect("/?view=ats")
                 return
             if parts == ["questionnaires", "fetch"]:
                 refresher.start(questionnaires_command)
@@ -376,7 +434,10 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
             view = parse_qs(url.query).get("view", ["today"])[0]
             conn = connect(db_path)
             try:
-                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status()).encode("utf-8")
+                error = ats_state["error"] if view == "ats" else ""
+                if view == "ats":
+                    ats_state["error"] = ""
+                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status(), error).encode("utf-8")
             finally:
                 conn.close()
             self.send_response(200)
@@ -391,8 +452,8 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def serve(db_path, host: str, port: int) -> None:
-    server = make_server(db_path, host, port)
+def serve(db_path, host: str, port: int, ats_model: str = "sonnet") -> None:
+    server = make_server(db_path, host, port, ats_model=ats_model)
     print(f"Dashboard on http://{host}:{port}")
     try:
         server.serve_forever()

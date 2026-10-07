@@ -1,0 +1,70 @@
+{% from "_icons.html" import icon %}
+{% set latest = ats_checks[0] if ats_checks else None %}
+{% if ats_error %}
+<div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not score that resume</b><p>{{ ats_error }}</p></div></div>
+{% endif %}
+<div class="ats">
+  <form method="post" action="/ats/check" enctype="multipart/form-data" class="card ats-form" data-busy>
+    <h3>Check a resume</h3>
+    <label class="field"><span>Resume (PDF or DOCX, up to 5 MB)</span>
+      <input type="file" name="resume" accept=".pdf,.docx" required>
+    </label>
+    <label class="field"><span>Experience level</span>
+      <select name="level" required>
+        {% for key, label in ats_levels.items() %}<option value="{{ key }}"{{ ' selected' if latest and latest.level == key else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>Job description <small class="muted">(optional, adds a keyword match)</small></span>
+      <textarea name="jd" rows="6" placeholder="Paste the job description to see which of its keywords your resume misses"></textarea>
+    </label>
+    <button type="submit" class="btn primary" data-busy-text="Scoring… about 15 seconds">{{ icon('gauge', 15) }} Check score</button>
+    <p class="muted small-print">The file is read in memory and never saved. Only the score and feedback are kept.</p>
+  </form>
+
+  {% if latest %}
+  {% set r = latest.result %}
+  <section class="card ats-result">
+    <div class="ats-head">
+      <div class="ats-score {{ 'good' if r.score >= 75 else 'mid' if r.score >= 55 else 'low' }}"><b>{{ r.score }}</b><small>/ 100</small></div>
+      <div>
+        <b>{{ latest.filename }}</b>
+        <div class="muted">{{ latest.level_label }} · {{ 'against the job description' if r.with_jd else 'no job description' }} · {{ latest.created_at[:16] | replace('T', ' ') }}</div>
+      </div>
+    </div>
+    {% set bars = [('Parsing', r.parse_score)] + ([('Keywords', r.keyword_score)] if r.keyword_score is not none else []) + [('Content', r.content_score), ('Impact', r.ratings.impact), ('Seniority', r.ratings.seniority), ('Clarity', r.ratings.clarity)] %}
+    <div class="ats-bars">
+      {% for name, value in bars %}
+      <div class="ats-bar"><span>{{ name }}</span><div class="track"><i style="width: {{ value }}%"></i></div><b>{{ value }}</b></div>
+      {% endfor %}
+    </div>
+    {% set failed = r.checks | rejectattr('ok') | list %}
+    <h3>Parse checks</h3>
+    <ul class="ats-checks">
+      {% for check in r.checks %}<li class="{{ 'ok' if check.ok else 'bad' }}">{{ '✓' if check.ok else '✗' }} {{ check.detail }}</li>{% endfor %}
+    </ul>
+    {% if r.missing_keywords or r.matched_keywords %}
+    <h3>Keywords</h3>
+    <div class="tags">
+      {% for keyword in r.missing_keywords %}<span class="tag warn">missing: {{ keyword }}</span>{% endfor %}
+      {% for keyword in r.matched_keywords %}<span class="tag done">{{ keyword }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% if r.fixes %}
+    <h3>Top fixes</h3>
+    <ol class="ats-fixes">{% for fix in r.fixes %}<li>{{ fix }}</li>{% endfor %}</ol>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+
+{% if ats_checks | length > 1 %}
+<section class="card ats-history">
+  <h3>History</h3>
+  <table>
+    {% for check in ats_checks %}
+    <tr><td>{{ check.filename }}</td><td class="muted">{{ check.level_label }}</td><td><b>{{ check.score }}</b></td><td class="muted">{{ check.created_at[:10] }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}

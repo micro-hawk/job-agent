@@ -470,3 +470,77 @@ def test_questionnaires_live_under_the_instahyre_tab(conn):
         assert 'href="/?view=instahyre" class="nav-item on"' in html
         assert 'href="/?view=questionnaires" class="nav-item' not in html
     assert 'class="subtab on">Questionnaires' in render(conn, "questionnaires", TODAY)
+
+
+def ats_result(score=72, fixes=("Quantify <impact>",)):
+    return {"score": score, "parse_score": 83, "content_score": 70, "keyword_score": 60, "ratings": {"impact": 80, "seniority": 60, "clarity": 70},
+            "checks": [{"name": "contact", "ok": False, "detail": "add an email and phone number as plain text"}],
+            "matched_keywords": ["Kafka"], "missing_keywords": ["Golang"], "fixes": list(fixes), "with_jd": True}
+
+
+def test_ats_view_shows_the_form_and_latest_result(conn):
+    from agent.ats import record_check
+    record_check(conn, "old.pdf", "junior", ats_result(40), NOW)
+    record_check(conn, "cv.pdf", "mid", ats_result(), NOW)
+    html = render(conn, "ats", TODAY)
+    assert 'enctype="multipart/form-data"' in html and 'action="/ats/check"' in html
+    assert html.count('<option value="') == 5 and "Senior (5–8 yrs)" in html
+    assert "72" in html and "Golang" in html and "Quantify &lt;impact&gt;" in html and "add an email and phone number" in html
+    assert "old.pdf" in html and 'href="/?view=ats" class="nav-item on"' in html
+
+
+def test_ats_view_shows_an_error_once(conn):
+    assert "upload a PDF or DOCX resume" in render(conn, "ats", TODAY, ats_error="upload a PDF or DOCX resume")
+
+
+def serve_ats(db, llm):
+    server = make_server(db, "127.0.0.1", 0, llm_factory=lambda conn: llm, ats_model="sonnet")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def test_ats_upload_scores_and_stores_the_result(tmp_path):
+    from tests.fakes import StubLLM
+    from tests.test_ats import RESUME, make_docx
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    llm = StubLLM({"ats": lambda prompt: {"impact": 80, "seniority": 70, "clarity": 75, "keywords": ["Kafka", "Golang"], "fixes": ["Lead with impact"]}})
+    server, base = serve_ats(db, llm)
+    try:
+        response = httpx.post(f"{base}/ats/check", data={"level": "senior", "jd": "Kafka and Golang"}, files={"resume": ("cv.docx", make_docx(RESUME.splitlines()))})
+        assert response.status_code == 303 and response.headers["location"] == "/?view=ats"
+        page = httpx.get(f"{base}/?view=ats").text
+    finally:
+        server.shutdown()
+        server.server_close()
+    row = conn.execute("SELECT filename, level, result FROM ats_checks").fetchone()
+    assert (row["filename"], row["level"]) == ("cv.docx", "senior") and json.loads(row["result"])["missing_keywords"] == ["Golang"]
+    assert "Kafka and Golang" in llm.calls[0][2] and "Lead with impact" in page
+
+
+def test_ats_upload_rejects_bad_input_without_storing(tmp_path):
+    from agent.ats import MAX_UPLOAD_BYTES
+    from agent.llm import LLMError
+    from tests.fakes import StubLLM
+    from tests.test_ats import RESUME, make_docx
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    llm = StubLLM({"ats": lambda prompt: LLMError("daily LLM budget $2.00 reached")})
+    server, base = serve_ats(db, llm)
+    docx = make_docx(RESUME.splitlines())
+    cases = [
+        ({"level": "mid"}, {"resume": ("cv.txt", b"hello")}, "upload a PDF or DOCX resume"),
+        ({"level": "guru"}, {"resume": ("cv.docx", docx)}, "choose an experience level"),
+        ({"level": "mid"}, {"resume": ("cv.docx", b"x" * (MAX_UPLOAD_BYTES + 1))}, "larger than 5 MB"),
+        ({"level": "mid"}, {"resume": ("cv.docx", docx)}, "budget"),
+    ]
+    try:
+        for data, files, message in cases:
+            assert httpx.post(f"{base}/ats/check", data=data, files=files).headers["location"] == "/?view=ats"
+            page = httpx.get(f"{base}/?view=ats").text
+            assert message in page, message
+            assert message not in httpx.get(f"{base}/?view=ats").text
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 0

@@ -265,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "dashboard":
         from dashboard.server import serve
 
-        serve(DB_PATH, settings["dashboard"]["host"], settings["dashboard"]["port"])
+        serve(DB_PATH, settings["dashboard"]["host"], settings["dashboard"]["port"], settings["models"].get("ats", "sonnet"))
         return 0
     if args.command == "instahyre" and args.apply:
         return instahyre_apply_command(args.limit)

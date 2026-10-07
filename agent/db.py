@@ -93,6 +93,15 @@ CREATE TABLE IF NOT EXISTS questionnaires (
     submitted_at TEXT,
     UNIQUE (questionnaire_id, opportunity_id)
 );
+CREATE TABLE IF NOT EXISTS ats_checks (
+    id INTEGER PRIMARY KEY,
+    filename TEXT NOT NULL,
+    level TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS seen_emails (
     message_id TEXT PRIMARY KEY,
     sender TEXT NOT NULL,

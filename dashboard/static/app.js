@@ -89,6 +89,14 @@
       });
     });
 
+    document.querySelectorAll("form[data-busy]").forEach(form => {
+      form.addEventListener("submit", () => {
+        const button = form.querySelector("button[type=submit]");
+        button.disabled = true;
+        button.textContent = button.dataset.busyText;
+      });
+    });
+
     document.querySelectorAll("button[data-confirm]").forEach(button => {
       button.addEventListener("click", event => { if (!confirm(button.dataset.confirm)) event.preventDefault(); });
     });

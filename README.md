@@ -12,6 +12,7 @@ A local job-search autopilot. It finds backend roles on company career boards, f
 - **Applies** to Greenhouse jobs above your fit threshold, answering only from your profile and resume. Anything it cannot answer truthfully is left for you under *Needs you*.
 - **Instahyre**: reads the matches in a hidden browser using your saved Instahyre session (a window opens only when you need to sign in) and, on one click, opens each job, presses Apply, and moves on.
 - **Referrals**: drafts LinkedIn connection notes and follow-ups for target companies. You send them yourself.
+- **ATS score**: upload a PDF or DOCX resume, pick your experience level and optionally paste a job description to get a score, parse checks, missing keywords and the top fixes. The file is never saved.
 - **Dashboard**: a local web app with an overview, job queues, search, market filters, and light and dark themes.
 
 | Ready to apply (dark) | Instahyre | Referrals |
