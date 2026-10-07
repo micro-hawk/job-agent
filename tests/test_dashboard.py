@@ -460,3 +460,13 @@ def test_blank_answers_offer_a_one_click_suggestion(conn):
     html = render(conn, "questionnaires", TODAY)
     assert 'placeholder="I have not led an AI project; my closest is &lt;MCP&gt;."' in html
     assert html.count("data-suggest=") == 1 and f'data-suggest="q{row_id}_2"' in html
+
+
+def test_questionnaires_live_under_the_instahyre_tab(conn):
+    add_questionnaire(conn)
+    for view in ("instahyre", "questionnaires"):
+        html = render(conn, view, TODAY)
+        assert 'href="/?view=instahyre" class="subtab' in html and 'href="/?view=questionnaires" class="subtab' in html
+        assert 'href="/?view=instahyre" class="nav-item on"' in html
+        assert 'href="/?view=questionnaires" class="nav-item' not in html
+    assert 'class="subtab on">Questionnaires' in render(conn, "questionnaires", TODAY)

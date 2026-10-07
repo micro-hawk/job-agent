@@ -6,14 +6,14 @@
   'manual': ('Manual 1-click', 'Jobs from your LinkedIn and Naukri alerts. Open, apply, then mark applied.'),
   'needs': ('Needs you', 'A required question had no truthful automatic answer. Finish these by hand.'),
   'referrals': ('Referrals', 'Warm introductions for your India target companies.'),
-  'questionnaires': ('Questionnaires', 'Screening questions recruiters sent on Instahyre. Review the drafted answers, then submit.'),
+  'questionnaires': ('Instahyre', 'Questionnaires recruiters sent you. Review the drafted answers, then submit.'),
   'applied': ('Applied', 'Every application that went out, newest first.'),
   'pipeline': ('In pipeline', 'Discovered and waiting to be scored.'),
   'skipped': ('Skipped', 'Filtered out or scored too low, with the reason for each.'),
 } -%}
 {%- set nav = [
   ('', [('today', 'home')]),
-  ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('questionnaires', 'send'), ('needs', 'alert')]),
+  ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('needs', 'alert')]),
   ('Network', [('referrals', 'users')]),
   ('Track', [('applied', 'check'), ('pipeline', 'layers'), ('skipped', 'eye-off')]),
 ] -%}
@@ -42,7 +42,7 @@
       {% for section, items in nav %}
       {% if section %}<div class="nav-section">{{ section }}</div>{% endif %}
       {% for key, glyph in items %}
-      <a href="/?view={{ key }}" class="nav-item{{ ' on' if view == key else '' }}">
+      <a href="/?view={{ key }}" class="nav-item{{ ' on' if view == key or (key == 'instahyre' and view == 'questionnaires') else '' }}">
         {{ icon(glyph) }}<span>{{ pages[key][0] if key != 'today' else 'Overview' }}</span>
         {% if key != 'today' and nav_counts.get(key) %}<b class="badge{{ ' hot' if key in ('needs', 'instahyre', 'ready') else '' }}">{{ nav_counts[key] }}</b>{% endif %}
       </a>
@@ -71,9 +71,10 @@
     {% elif view == 'referrals' %}
       {% include "_referrals.html" %}
     {% elif view == 'questionnaires' %}
+      {% include "_instahyre_tabs.html" %}
       {% include "_questionnaires.html" %}
     {% else %}
-      {% if view == 'instahyre' %}{% include "_instahyre.html" %}{% endif %}
+      {% if view == 'instahyre' %}{% include "_instahyre_tabs.html" %}{% include "_instahyre.html" %}{% endif %}
       {% if view == 'manual' %}{% include "_manual.html" %}{% endif %}
       {% include "_jobs.html" %}
     {% endif %}

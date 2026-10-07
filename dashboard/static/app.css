@@ -239,6 +239,10 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 
 /* ---------- job list ---------- */
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.subtab { padding: 8px 14px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+.subtab.on { color: var(--fg); border-bottom-color: var(--accent); }
+.subtab b { font-size: 11px; background: var(--panel-2); border-radius: 99px; padding: 1px 7px; margin-left: 4px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--line); background: var(--panel); color: var(--muted); border-radius: 99px; padding: 4px 12px; font-size: 12.5px; }
 .chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
