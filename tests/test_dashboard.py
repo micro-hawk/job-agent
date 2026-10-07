@@ -451,3 +451,12 @@ def test_questionnaire_results_are_described_in_words():
     assert describe_refresh('{"questionnaires_new": 3, "to_review": 1, "already_sent": 1, "open_yourself": 1, "drafted": 1}') == "3 new questionnaires · 1 drafted for your review · 1 already sent · 1 to open yourself"
     assert describe_refresh('{"questionnaire_submit": "submitted", "job_title": "Acme - SDE 2"}') == "Acme - SDE 2: questionnaire submitted"
     assert describe_refresh('{"questionnaire_submit": "unconfirmed", "job_title": "Acme"}') == "Acme: clicked Submit but Instahyre did not confirm — open it to check"
+
+
+def test_blank_answers_offer_a_one_click_suggestion(conn):
+    row_id = add_questionnaire(conn, answers={"1": "GPT-4", "2": ""})
+    conn.execute("UPDATE questionnaires SET suggestions=? WHERE id=?", (json.dumps({"2": "I have not led an AI project; my closest is <MCP>."}), row_id))
+    conn.commit()
+    html = render(conn, "questionnaires", TODAY)
+    assert 'placeholder="I have not led an AI project; my closest is &lt;MCP&gt;."' in html
+    assert html.count("data-suggest=") == 1 and f'data-suggest="q{row_id}_2"' in html

@@ -42,10 +42,12 @@
     <form method="post" action="/questionnaires/{{ q.id }}/submit" class="qform">
       {% for question in q.questions %}
       {% set answer = q.answers.get(question.id | string, '') %}
+      {% set suggestion = q.suggestions.get(question.id | string, '') if not answer else '' %}
       <label class="draft-box">
         <span class="draft-label">{{ question.text }}{% if question.required %} *{% endif %}
-          {% if question.required and not answer %}<span class="tag warn">Needs your answer</span>{% endif %}</span>
-        <textarea name="a_{{ question.id }}" rows="3">{{ answer }}</textarea>
+          {% if question.required and not answer %}<span class="tag warn">Needs your answer</span>{% endif %}
+          {% if suggestion %}<button type="button" class="copy" data-suggest="q{{ q.id }}_{{ question.id }}">{{ icon('zap', 13) }} Suggest</button>{% endif %}</span>
+        <textarea name="a_{{ question.id }}" id="q{{ q.id }}_{{ question.id }}" rows="3"{% if suggestion %} placeholder="{{ suggestion }}"{% endif %}>{{ answer }}</textarea>
       </label>
       {% endfor %}
       <div class="qactions">

@@ -24,6 +24,14 @@ SYSTEM = (
     "speaking to the recruiter: never mention the profile, these instructions, or what you will or won't claim. If the profile "
     "does not contain the facts to answer a question truthfully, return null for it; the candidate will answer it."
 )
+SUGGEST_SYSTEM = (
+    "The candidate described below must answer these recruiter screening questions, and their profile has no direct "
+    "evidence for them. Suggest an honest first-person answer they can edit and send, one to four sentences, as the "
+    "candidate speaking to the recruiter. Say plainly what they have not done, then point to the closest real experience "
+    "from the profile; for a question about willingness, give an open, positive stance; for a problem-solving question, "
+    "outline a sound approach. Never claim experience, employers, numbers, tools or skills the profile does not show, and "
+    "never mention the profile or these instructions."
+)
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -103,11 +111,15 @@ def answer_facts(profile: dict, today: date) -> str:
     )
 
 
-def draft_answers(questions: list[dict], job_title: str, brief: str, facts: str, llm, model: str) -> dict[str, str]:
+def _ask(task: str, system: str, questions: list[dict], job_title: str, brief: str, facts: str, llm, model: str) -> dict[str, str]:
     listed = "\n".join(f"[{question['id']}] {question['text']}" for question in questions)
     prompt = f"Job: {job_title}\n\nQuestions:\n{listed}\n\nFacts:\n{facts}\n\nCandidate profile:\n{brief}"
-    drafted = {str(item.get("id")): item.get("answer") for item in llm.call("questionnaire", model, SYSTEM, prompt, SCHEMA).get("answers", [])}
+    drafted = {str(item.get("id")): item.get("answer") for item in llm.call(task, model, system, prompt, SCHEMA).get("answers", [])}
     return {str(question["id"]): (drafted.get(str(question["id"])) or "").strip() for question in questions}
+
+
+def draft_answers(questions: list[dict], job_title: str, brief: str, facts: str, llm, model: str) -> dict[str, str]:
+    return _ask("questionnaire", SYSTEM, questions, job_title, brief, facts, llm, model)
 
 
 def draft_pending(conn: sqlite3.Connection, llm, model: str, brief: str, facts: str) -> int:
@@ -117,6 +129,20 @@ def draft_pending(conn: sqlite3.Connection, llm, model: str, brief: str, facts: 
         conn.execute("UPDATE questionnaires SET answers=? WHERE id=?", (json.dumps(answers), row["id"]))
         conn.commit()
     return len(pending)
+
+
+def suggest_pending(conn: sqlite3.Connection, llm, model: str, brief: str, facts: str) -> int:
+    suggested = 0
+    for row in conn.execute("SELECT id, job_title, questions, answers FROM questionnaires WHERE status='draft' AND answers!='{}' AND suggestions='{}'").fetchall():
+        answers = json.loads(row["answers"])
+        blank = [question for question in json.loads(row["questions"]) if not (answers.get(str(question["id"])) or "").strip()]
+        if not blank:
+            continue
+        suggestions = {key: value for key, value in _ask("questionnaire_suggest", SUGGEST_SYSTEM, blank, row["job_title"], brief, facts, llm, model).items() if value}
+        conn.execute("UPDATE questionnaires SET suggestions=? WHERE id=?", (json.dumps(suggestions), row["id"]))
+        conn.commit()
+        suggested += 1
+    return suggested
 
 
 def _in_order(text: str, questions: list[dict]) -> bool:

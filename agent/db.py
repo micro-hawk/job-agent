@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS questionnaires (
     url TEXT NOT NULL,
     questions TEXT NOT NULL DEFAULT '[]',
     answers TEXT NOT NULL DEFAULT '{}',
+    suggestions TEXT NOT NULL DEFAULT '{}',
     status TEXT NOT NULL,
     reason TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
@@ -108,6 +109,9 @@ def connect(path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    if "suggestions" not in {row["name"] for row in conn.execute("PRAGMA table_info(questionnaires)")}:
+        conn.execute("ALTER TABLE questionnaires ADD COLUMN suggestions TEXT NOT NULL DEFAULT '{}'")
+        conn.commit()
     return conn
 
 

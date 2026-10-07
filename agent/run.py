@@ -187,7 +187,7 @@ def questionnaires_command(settings: dict, submit_id: int | None = None) -> int:
     from playwright.sync_api import sync_playwright
 
     from agent.discover.instahyre import PROFILE_DIR_NAME, InstahyreBlocked, _open
-    from agent.questionnaire import answer_facts, collect_questionnaires, draft_pending, fill_and_submit, record_submit
+    from agent.questionnaire import answer_facts, collect_questionnaires, draft_pending, fill_and_submit, record_submit, suggest_pending
 
     conn = connect(DB_PATH)
     row = None
@@ -217,7 +217,9 @@ def questionnaires_command(settings: dict, submit_id: int | None = None) -> int:
     llm = LLM(conn, settings["daily_budget_usd"])
     profile = load_profile()
     facts = answer_facts(profile, datetime.now().date())
-    stats["drafted"] = draft_pending(conn, llm, settings["models"].get("questionnaire", "sonnet"), answer_brief(profile, load_resume()), facts)
+    model, brief = settings["models"].get("questionnaire", "sonnet"), answer_brief(profile, load_resume())
+    stats["drafted"] = draft_pending(conn, llm, model, brief, facts)
+    stats["suggested"] = suggest_pending(conn, llm, model, brief, facts)
     print(json.dumps(stats))
     return 0
 

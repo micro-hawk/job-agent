@@ -80,6 +80,15 @@
       form.addEventListener("submit", () => session.set("toast", form.dataset.toast));
     });
 
+    document.querySelectorAll("button[data-suggest]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        const box = document.getElementById(button.dataset.suggest);
+        box.value = box.placeholder;
+        box.focus();
+      });
+    });
+
     document.querySelectorAll("button[data-confirm]").forEach(button => {
       button.addEventListener("click", event => { if (!confirm(button.dataset.confirm)) event.preventDefault(); });
     });

@@ -230,7 +230,7 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
     questionnaires = []
     if view == "questionnaires":
         questionnaires = [
-            dict(row) | {"questions": json.loads(row["questions"]), "answers": json.loads(row["answers"])}
+            dict(row) | {"questions": json.loads(row["questions"]), "answers": json.loads(row["answers"]), "suggestions": json.loads(row["suggestions"])}
             for row in conn.execute("SELECT * FROM questionnaires ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'manual' THEN 1 ELSE 2 END, id DESC")
         ]
     return {

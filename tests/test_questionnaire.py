@@ -5,7 +5,7 @@ import pytest
 
 from agent.questionnaire import (
     SENT_TEXT, answer_facts, collect_questionnaires, draft_answers, draft_pending, fill_and_submit, questionnaire_links,
-    record_submit,
+    record_submit, suggest_pending,
 )
 
 from tests.fakes import NOW, StubLLM
@@ -206,3 +206,34 @@ def test_record_submit_marks_the_outcome(conn):
 def test_drafting_prompt_keeps_answers_in_the_candidates_voice():
     from agent.questionnaire import SYSTEM
     assert "never mention the profile" in SYSTEM.lower()
+
+
+def test_suggest_pending_suggests_only_for_blank_answers(conn):
+    conn.execute(
+        "INSERT INTO questionnaires (questionnaire_id, opportunity_id, job_title, url, questions, answers, status, created_at) VALUES ('1', '100', 'Acme', 'u', ?, ?, 'draft', ?)",
+        (json.dumps(TEXT_QUESTIONS), json.dumps({"1": "GPT-4", "2": "", "3": ""}), NOW),
+    )
+    conn.execute("INSERT INTO questionnaires (questionnaire_id, opportunity_id, job_title, url, questions, answers, status, created_at) VALUES ('2', '200', 'Beta', 'u', ?, ?, 'draft', ?)", (json.dumps(TEXT_QUESTIONS), json.dumps({"1": "a", "2": "b", "3": "c"}), NOW))
+    llm = StubLLM({"questionnaire_suggest": lambda prompt: {"answers": [{"id": 2, "answer": " I can join after 30 Oct. "}, {"id": 1, "answer": "x"}, {"id": 3, "answer": None}]}})
+    assert suggest_pending(conn, llm, "sonnet", "brief", "facts") == 1
+    assert suggest_pending(conn, llm, "sonnet", "brief", "facts") == 0
+    assert json.loads(rows(conn)[0]["suggestions"]) == {"2": "I can join after 30 Oct."}
+    task, _, prompt = llm.calls[0]
+    assert task == "questionnaire_suggest" and "[2] Notice Period" in prompt and "[1] Which LLMs" not in prompt
+
+
+def test_suggestion_prompt_forbids_invented_experience():
+    from agent.questionnaire import SUGGEST_SYSTEM
+    assert "never claim" in SUGGEST_SYSTEM.lower() and "have not" in SUGGEST_SYSTEM.lower()
+
+
+def test_existing_databases_gain_the_suggestions_column(tmp_path):
+    import sqlite3
+    from agent.db import connect
+    db = tmp_path / "old.db"
+    old = sqlite3.connect(db)
+    old.execute("CREATE TABLE questionnaires (id INTEGER PRIMARY KEY, questionnaire_id TEXT NOT NULL, opportunity_id TEXT NOT NULL, job_title TEXT NOT NULL, url TEXT NOT NULL, questions TEXT NOT NULL DEFAULT '[]', answers TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, submitted_at TEXT, UNIQUE (questionnaire_id, opportunity_id))")
+    old.commit()
+    old.close()
+    columns = [row["name"] for row in connect(db).execute("PRAGMA table_info(questionnaires)")]
+    assert "suggestions" in columns
