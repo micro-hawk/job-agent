@@ -140,3 +140,52 @@ def test_bad_requests_show_an_error(tmp_path):
         assert httpx.post(f"{base}/resume/999/save", data={"tex": "x"}).status_code == 404
     finally:
         stop(server)
+
+
+def pdf_compiler():
+    from tests.test_ats import RESUME as TEXT, make_pdf
+    lines = TEXT.replace("—", "-").replace("–", "-").splitlines()
+    return lambda tex: make_pdf([lines])
+
+
+def ats_llm():
+    return StubLLM({"ats": lambda prompt: {"impact": 90, "seniority": 80, "clarity": 85, "keywords": ["Kafka", "Golang"], "fixes": ["Add a Golang project"]}})
+
+
+def test_draft_is_scored_from_its_compiled_pdf_without_storing_anything(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    check = record_check(conn, "cv.pdf", "senior", ats_result(61), NOW)
+    draft_id = create_draft(conn, "Classic · fixes", "classic", f"ats:{check}", NOW, tex="x")
+    llm = ats_llm()
+    server, base = serve(db, llm=llm, compiler=pdf_compiler())
+    try:
+        httpx.post(f"{base}/resume/{draft_id}/save", data={"tex": "x"}, headers={"Accept": "application/json"})
+        editor = httpx.get(f"{base}/?view=resume&draft={draft_id}").text
+        result = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "senior", "jd": "Kafka and Golang"}).json()
+    finally:
+        stop(server)
+    assert 'data-rb-ats' in editor and f'action="/resume/{draft_id}/ats"' in editor and 'value="senior" checked' in editor
+    assert result["ok"] and result["baseline"] == {"score": 61, "filename": "cv.pdf"} and isinstance(result["score"], int)
+    assert "ATS score" in result["html"] and "Golang" in result["html"] and "Add a Golang project" in result["html"]
+    assert "Kafka and Golang" in llm.calls[0][2]
+    assert conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 1
+
+
+def test_draft_scoring_needs_a_compiled_pdf_and_a_level(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    draft_id = create_draft(conn, "Draft", "classic", "master", NOW, tex="x")
+    llm = ats_llm()
+    server, base = serve(db, llm=llm, compiler=pdf_compiler())
+    try:
+        missing = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "mid"}).json()
+        httpx.post(f"{base}/resume/{draft_id}/save", data={"tex": "x"}, headers={"Accept": "application/json"})
+        no_level = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "boss"}).json()
+        master = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "mid"}).json()
+        unknown = httpx.post(f"{base}/resume/999/ats", data={"level": "mid"}).status_code
+    finally:
+        stop(server)
+    assert missing == {"ok": False, "error": "Compile the resume without errors first"}
+    assert no_level == {"ok": False, "error": "Choose an experience level"}
+    assert master["ok"] and master["baseline"] is None and unknown == 404 and len(llm.calls) == 1

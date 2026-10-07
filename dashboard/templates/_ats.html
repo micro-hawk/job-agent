@@ -1,6 +1,6 @@
 {% from "_icons.html" import icon %}
 {% set latest = ats_latest %}
-{% macro band(score) -%}{{ 'good' if score >= 75 else 'mid' if score >= 55 else 'low' }}{%- endmacro %}
+{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list %}
 {% if ats_error %}
 <div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not score that resume</b><p>{{ ats_error }}</p></div></div>
 {% endif %}
@@ -39,15 +39,9 @@
   {% set r = latest.result %}
   <section class="card ats-result">
     <div class="ats-head">
-      <div class="ring {{ band(r.score) }}" style="--score: {{ r.score }}">
-        <svg viewBox="0 0 120 120" aria-hidden="true">
-          <circle class="ring-track" cx="60" cy="60" r="52"/>
-          <circle class="ring-fill" cx="60" cy="60" r="52" pathLength="100"/>
-        </svg>
-        <div class="ring-label"><b data-count="{{ r.score }}">{{ r.score }}</b><small>ATS score</small></div>
-      </div>
+      {{ ring(r) }}
       <div class="ats-summary">
-        <span class="verdict {{ band(r.score) }}">{{ 'Strong match' if r.score >= 75 else 'Good, with gaps' if r.score >= 55 else 'Needs work' }}</span>
+        <span class="verdict {{ band(r.score) }}">{{ verdict(r.score) }}</span>
         <b class="ats-file">{{ icon('file', 15) }} {{ latest.filename }}</b>
         <div class="muted">{{ latest.level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
         <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
@@ -63,34 +57,11 @@
     <div class="saved-note">{{ icon('check', 15) }}<span><b>Saved result</b> from {{ latest.created_at[:16] | replace('T', ' ') }} · no tokens used. This file was already scored with the same level and job description.</span></div>
     {% endif %}
 
-    {% set bars = [('Parsing', r.parse_score)] + ([('Keywords', r.keyword_score)] if r.keyword_score is not none else []) + [('Content', r.content_score), ('Impact', r.ratings.impact), ('Seniority', r.ratings.seniority), ('Clarity', r.ratings.clarity)] %}
-    <div class="ats-bars">
-      {% for name, value in bars %}
-      <div class="ats-bar" style="--i: {{ loop.index0 }}"><span>{{ name }}</span><div class="track"><i class="{{ band(value) }}" style="--w: {{ value }}%"></i></div><b>{{ value }}</b></div>
-      {% endfor %}
-    </div>
-
-    <div class="ats-section">
-      <h3>Parse checks</h3>
-      <ul class="ats-checks">
-        {% for check in r.checks %}<li class="{{ 'ok' if check.ok else 'bad' }}"><span class="dot">{{ '✓' if check.ok else '!' }}</span>{{ check.detail }}</li>{% endfor %}
-      </ul>
-    </div>
-
-    {% if r.missing_keywords or r.matched_keywords %}
-    <div class="ats-section">
-      <h3>Keywords <small class="muted">{{ r.matched_keywords | length }} of {{ (r.matched_keywords | length) + (r.missing_keywords | length) }} found</small></h3>
-      <div class="tags">
-        {% for keyword in r.missing_keywords %}<span class="tag warn">{{ keyword }}</span>{% endfor %}
-        {% for keyword in r.matched_keywords %}<span class="tag done">✓ {{ keyword }}</span>{% endfor %}
-      </div>
-    </div>
-    {% endif %}
+    {{ breakdown(r) }}
 
     {% if r.fixes %}
     <div class="ats-section">
-      <h3>Top fixes</h3>
-      <ol class="ats-fixes">{% for fix in r.fixes %}<li style="--i: {{ loop.index0 }}"><span>{{ loop.index }}</span><p>{{ fix }}</p></li>{% endfor %}</ol>
+      {{ fix_list(r) }}
       <a class="build-cta" href="/?view=resume&check={{ latest.id }}">
         <span class="cta-icon">{{ icon('file', 18) }}</span>
         <span><b>Build a resume from these fixes</b><small>Claude rewrites your master resume's wording; you pick which changes to keep.</small></span>

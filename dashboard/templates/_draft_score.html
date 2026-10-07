@@ -1,0 +1,17 @@
+{% from "_icons.html" import icon %}
+{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list %}
+<div class="ats-head rb-ats-head">
+  {{ ring(r) }}
+  <div class="ats-summary">
+    <span class="verdict {{ band(r.score) }}">{{ verdict(r.score) }}</span>
+    {% if baseline %}
+    {% set delta = r.score - baseline.score %}
+    <b class="rb-delta {{ 'up' if delta > 0 else 'down' if delta < 0 else 'same' }}">{{ baseline.score }} → {{ r.score }} <span>{{ '%+d' % delta if delta else 'no change' }}</span></b>
+    <div class="muted">vs. the original check of {{ baseline.filename }}</div>
+    {% endif %}
+    <div class="muted">{{ level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
+    <div class="muted">{{ icon('eye-off', 13) }} Not saved anywhere</div>
+  </div>
+</div>
+{{ breakdown(r) }}
+{% if r.fixes %}<div class="ats-section">{{ fix_list(r) }}</div>{% endif %}

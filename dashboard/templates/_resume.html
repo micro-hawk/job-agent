@@ -116,6 +116,7 @@
     <span class="rb-status {{ 'bad' if draft.error else 'ok' }}" data-status>{{ 'Compile error' if draft.error else 'Compiled' }}</span>
     <div class="rb-actions">
       <button type="button" class="btn primary small" data-recompile title="Recompile (⌘S)">{{ icon('play', 13) }} Recompile <kbd>⌘S</kbd></button>
+      <button type="button" class="btn small" data-ats-toggle aria-expanded="false">{{ icon('gauge', 13) }} ATS score</button>
       <a class="btn small" href="/resume/{{ draft.id }}.tex?download=1" data-download-tex>{{ icon('download', 13) }} .tex</a>
       <a class="btn small" href="/resume/{{ draft.id }}.pdf?download=1" data-download-pdf{{ ' hidden' if not b.has_pdf else '' }}>{{ icon('download', 13) }} PDF</a>
       <form method="post" action="https://www.overleaf.com/docs" target="_blank" rel="noopener" data-overleaf>
@@ -126,6 +127,29 @@
       </form>
     </div>
   </div>
+  <section class="card rb-ats" data-rb-ats hidden>
+    <form method="post" action="/resume/{{ draft.id }}/ats" class="rb-ats-form" data-rb-ats-form>
+      <div class="rb-ats-top">
+        <div><h3>{{ icon('gauge', 16) }} Score this draft</h3><p class="muted">Saves and compiles your edits, then scores the PDF the way an ATS reads it. The result is shown here only and never stored.</p></div>
+        <button type="button" class="icon-btn" data-ats-close aria-label="Close ATS score">{{ icon('x', 14) }}</button>
+      </div>
+      <div class="levels rb-ats-levels">
+        {% set chosen = b.source_check.level if b.source_check else 'mid' %}
+        {% for key, label in b.levels.items() %}
+        {% set name, years = label.split(' (') %}
+        <label class="level"><input type="radio" name="level" value="{{ key }}"{{ ' checked' if key == chosen else '' }} required><span><b>{{ name }}</b><small>{{ years.rstrip(')') }}</small></span></label>
+        {% endfor %}
+      </div>
+      <textarea name="jd" rows="2" class="jd" placeholder="Optional: paste the job description to check its keywords"></textarea>
+      <div class="rb-ats-go">
+        <button type="submit" class="btn primary small" data-ats-run>{{ icon('sparkle', 13) }} Check score</button>
+        {% if b.source_check %}<small class="muted">Compared with the original check of {{ b.source_check.filename }} ({{ b.source_check.score }})</small>{% endif %}
+      </div>
+    </form>
+    <div class="rb-ats-busy" data-ats-busy hidden><span class="spinner"></span> <span data-ats-busy-text>Scoring your draft…</span></div>
+    <p class="field-error" data-ats-error hidden></p>
+    <div class="rb-ats-result ats-result" data-ats-result></div>
+  </section>
   <div class="rb-panes">
     <form method="post" action="/resume/{{ draft.id }}/save" class="rb-source-pane card" data-tex-form>
       <div class="pane-head"><span>main.tex</span><small class="muted" data-dirty></small></div>

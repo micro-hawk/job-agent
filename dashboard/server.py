@@ -214,6 +214,11 @@ def _daily_applied(conn: sqlite3.Connection, today: date) -> list[dict]:
     return [{"day": day.isoformat(), "label": str(day.day), "n": per_day.get(day.isoformat(), 0)} for day in days]
 
 
+def _source_check(conn: sqlite3.Connection, draft: dict | None) -> dict | None:
+    source = draft["source"] if draft else ""
+    return get_check(conn, int(source[4:])) if source.startswith("ats:") and source[4:].isdigit() else None
+
+
 def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
     draft_id = str(builder.get("draft") or "")
     draft = get_draft(conn, int(draft_id)) if draft_id.isdigit() else None
@@ -223,6 +228,8 @@ def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
         "checks": [check for check in recent_checks(conn) if check["result"].get("fixes")],
         "check": str(builder.get("check") or ""),
         "draft": draft,
+        "source_check": _source_check(conn, draft),
+        "levels": {key: value[0] for key, value in LEVELS.items()},
         "has_pdf": bool(builder.get("has_pdf")),
         "error": builder.get("error", ""),
     }
@@ -392,6 +399,25 @@ def generate_resume(conn: sqlite3.Connection, draft: dict, accepted: set[str], l
     return render_tex(draft["template"], apply_changes(resume, [proposal for proposal in proposals if proposal["accepted"]]), profile)
 
 
+def score_draft(conn: sqlite3.Connection, draft: dict, form: dict, pdf: Path, llm, model: str) -> dict:
+    level, jd = form.get("level", [""])[0], form.get("jd", [""])[0]
+    if draft["error"] or not pdf.is_file():
+        return {"ok": False, "error": "Compile the resume without errors first"}
+    if level not in LEVELS:
+        return {"ok": False, "error": "Choose an experience level"}
+    try:
+        text, pages = extract_text("resume.pdf", pdf.read_bytes())
+        result = score_resume(text, pages, level, jd, llm, model)
+    except AtsInputError as exc:
+        return {"ok": False, "error": str(exc)}
+    except LLMError as exc:
+        return {"ok": False, "error": f"scoring failed: {exc}"}
+    source = _source_check(conn, draft)
+    baseline = {"score": source["score"], "filename": source["filename"]} if source else None
+    html = _ENV.get_template("_draft_score.html").render(r=result, baseline=baseline, level_label=LEVELS[level][0])
+    return {"ok": True, "score": result["score"], "baseline": baseline, "html": html}
+
+
 def compile_draft(conn: sqlite3.Connection, draft_id: int, tex: str, compiler, pdf_dir: Path, now: str) -> dict:
     try:
         pdf = compiler(tex)
@@ -515,7 +541,7 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                     self.redirect(f"/?view=resume&draft={draft_id}" if draft_id else "/?view=resume")
                     return
                 draft = get_draft(conn, int(parts[1])) if len(parts) == 3 and parts[1].isdigit() else None
-                if not draft or parts[2] not in ("generate", "save", "delete"):
+                if not draft or parts[2] not in ("generate", "save", "delete", "ats"):
                     self.send_error(404)
                     return
                 if parts[2] == "delete":
@@ -528,6 +554,9 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                         tex = generate_resume(conn, draft, set(form.get("accept", [])), resume_loader, now)
                         compile_draft(conn, draft["id"], tex, compiler, pdf_dir, now)
                     self.redirect(f"/?view=resume&draft={draft['id']}")
+                    return
+                if parts[2] == "ats":
+                    self.send_json(score_draft(conn, draft, form, pdf_dir / f"{draft['id']}.pdf", llm_factory(conn), ats_model))
                     return
                 result = compile_draft(conn, draft["id"], form.get("tex", [""])[0], compiler, pdf_dir, now)
             finally:

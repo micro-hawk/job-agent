@@ -307,7 +307,7 @@
     let editor = null;
     let dirty = false;
     let marked = null;
-    let busy = false;
+    let busy = null;
 
     if (window.CodeMirror) {
       editor = window.CodeMirror.fromTextArea(textarea, { mode: "stex", lineNumbers: true, lineWrapping: true, indentUnit: 2, tabSize: 2 });
@@ -347,11 +347,10 @@
     }
 
     function recompile() {
-      if (busy) return;
-      busy = true;
+      if (busy) return busy;
       setStatus("busy", "Compiling…");
       compiling.hidden = false;
-      fetch(form.action, {
+      busy = fetch(form.action, {
         method: "POST",
         headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
         body: new URLSearchParams({ tex: value() }),
@@ -373,14 +372,19 @@
           setStatus("bad", "Compile error");
           toast("Saved, but LaTeX reported an error");
         }
+        return result.ok;
       }).catch(error => {
         setStatus("bad", "Not saved");
         toast("Could not save: " + error.message);
+        return false;
       }).finally(() => {
-        busy = false;
+        busy = null;
         compiling.hidden = true;
       });
+      return busy;
     }
+
+    setupDraftScore(root, recompile, () => dirty || status.classList.contains("bad") || frame.hidden);
 
     root.querySelector("[data-recompile]").addEventListener("click", recompile);
     form.addEventListener("submit", event => { event.preventDefault(); recompile(); });
@@ -416,8 +420,72 @@
     }
   }
 
-  function countUp() {
-    document.querySelectorAll("[data-count]").forEach(el => {
+  function setupDraftScore(root, recompile, needsCompile) {
+    const panel = root.querySelector("[data-rb-ats]");
+    const toggle = root.querySelector("[data-ats-toggle]");
+    const form = panel.querySelector("[data-rb-ats-form]");
+    const run = panel.querySelector("[data-ats-run]");
+    const busy = panel.querySelector("[data-ats-busy]");
+    const busyText = panel.querySelector("[data-ats-busy-text]");
+    const error = panel.querySelector("[data-ats-error]");
+    const result = panel.querySelector("[data-ats-result]");
+
+    function open(next) {
+      panel.hidden = !next;
+      toggle.setAttribute("aria-expanded", String(next));
+      toggle.classList.toggle("on", next);
+      if (next) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    toggle.addEventListener("click", () => open(panel.hidden));
+    panel.querySelector("[data-ats-close]").addEventListener("click", () => open(false));
+
+    function fail(text) {
+      error.hidden = false;
+      error.textContent = text;
+    }
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      error.hidden = true;
+      run.disabled = true;
+      busy.hidden = false;
+      result.classList.add("stale");
+      let timer = null;
+      try {
+        if (needsCompile()) {
+          busyText.textContent = "Saving and compiling your edits…";
+          if (!(await recompile())) {
+            fail("Fix the LaTeX error and compile before scoring.");
+            return;
+          }
+        }
+        const started = Date.now();
+        (function tick() {
+          busyText.textContent = "Scoring your draft… " + Math.floor((Date.now() - started) / 1000) + "s · usually about 15 seconds";
+          timer = setTimeout(tick, 500);
+        })();
+        const response = await fetch(form.action, { method: "POST", body: new URLSearchParams(new FormData(form)), headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("The server answered " + response.status);
+        const reply = await response.json();
+        if (!reply.ok) {
+          fail(reply.error);
+          return;
+        }
+        result.innerHTML = reply.html;
+        result.classList.remove("stale");
+        countUp(result);
+      } catch (failure) {
+        fail("Could not score this draft: " + failure.message);
+      } finally {
+        clearTimeout(timer);
+        run.disabled = false;
+        busy.hidden = true;
+      }
+    });
+  }
+
+  function countUp(scope) {
+    (scope || document).querySelectorAll("[data-count]").forEach(el => {
       const target = Number(el.dataset.count);
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       const started = performance.now();
