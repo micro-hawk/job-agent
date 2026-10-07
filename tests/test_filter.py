@@ -31,6 +31,9 @@ ALLOWED = [
     "Senior Backend Engineer", "Senior Backend Engineer - Data Integrations", "Senior Java Developer", "Software Engineer III", "Senior Software Engineer II",
     "Java Developer", "Backend Developer", "Senior Java Backend Developer", "Java Back End Developer", "Java Full Stack Developer",
     "Software Developer", "Senior Software Developer", "Senior Software Engineer II (Backend)", "Java Backend Developer - 3 To 20 years",
+    "Software Development Engineer III", "SDE 3", "SDE III", "SDE-3", "Software Engineer II Backend", "SDE II Payments",
+    "Backend Software Engineer", "Backend Systems Engineer", "Product Software Engineer", "Product Software Engineer II - (1071)",
+    "Product Software Engineer - 1108", "Full Stack Java Developer", "Full - Stack Developer - Java", "Fullstack Java Engineer",
 ]
 DENIED = [
     "Staff Software Engineer", "Staff Software Development Engineer - Java/Go", "Principal Engineer", "Engineering Manager",
@@ -38,6 +41,7 @@ DENIED = [
     "Java Technical Lead", "Senior Java Engineering Lead, Credit Exposure- Vice President", "Senior Software Engineer - Tech Lead", "Backend Engineering Manager",
     "Senior Backend Product Engineer", "SDET II", "Senior Software Engineer in Test", "Senior Software Engineer - Infrastructure",
     "Software Engineer, Security", "Platform Engineer - Kubernetes", "Backend Engineering Intern", "Frontend Engineer", "Software Engineer Intern",
+    "Full Stack Developer", "Fullstack Engineer", "MERN Full Stack Engineer", "Full - Stack Engineer - WEB", "Software Engineer II Infrastructure",
 ]
 
 
