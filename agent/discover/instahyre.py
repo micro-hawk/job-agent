@@ -123,6 +123,8 @@ AGENT_APPLIED_REASON = "applied on Instahyre by the agent"
 APPLY_BUTTON = "button[ng-click='submitChoice(opp, true)']:visible"
 SENT_SCRIPT = "() => { const e = document.querySelector('.application-sent'); return !!e && e.offsetParent !== null; }"
 APPLY_CONFIRM_SECONDS = 15
+TAB_CLOSED = "you closed the Instahyre tab"
+WINDOW_CLOSED = "the Instahyre window was closed"
 LEFT_REASONS = {
     "unconfirmed": "clicked Apply but Instahyre did not confirm — check this one",
     "no_button": "no Apply button on the Instahyre page — check this one",
@@ -172,16 +174,22 @@ def apply_jobs(new_page, jobs: list[dict], record, sleep, pause_seconds: float, 
     for job in jobs:
         if stop_file.exists():
             return "STOP file"
-        page = new_page()
+        try:
+            page = new_page()
+        except PlaywrightError:
+            return WINDOW_CLOSED
         try:
             outcome = apply_one(page, job["url"])
         except InstahyreBlocked as blocked:
             return str(blocked)
         except PlaywrightError as exc:
+            if page.is_closed():
+                return TAB_CLOSED
             print(f"instahyre: {job['url']}: {str(exc).splitlines()[0]}")
             outcome = "error"
         finally:
-            page.close()
+            if not page.is_closed():
+                page.close()
         record(job["id"], outcome)
         if outcome == "applied":
             sleep(pause_seconds)

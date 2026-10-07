@@ -132,6 +132,7 @@ def test_refresher_runs_once_at_a_time_and_keeps_last_line(tmp_path):
 def test_instahyre_view_shows_refresh_button_and_status(conn):
     html = render(conn, "instahyre", TODAY, {"running": True, "started_at": "2026-10-06T10:00:00", "last": ""})
     assert "Working on Instahyre" in html and 'action="/instahyre/refresh"' not in html
+    assert 'action="/instahyre/stop"' in html
     html = render(conn, "instahyre", TODAY, {"running": False, "started_at": "2026-10-06T10:00:00", "last": "instahyre: stopped, logged out"})
     assert "instahyre: stopped, logged out" in html and 'action="/instahyre/refresh"' in html
     assert 'action="/instahyre/refresh"' not in render(conn, "ready", TODAY)
@@ -270,3 +271,62 @@ def test_company_hue_is_stable_and_in_range():
 def test_market_labels_read_naturally():
     from dashboard.server import market_label
     assert [market_label(m) for m in ("uk", "eu", "uae", "global_remote", "india", "mars")] == ["UK", "EU", "UAE", "Global remote", "India", "Mars"]
+
+
+def test_refresher_stop_kills_the_run_and_its_children(tmp_path):
+    import os
+    import sys
+    import time
+    from dashboard.server import Refresher
+    child_pid = tmp_path / "child.pid"
+    script = (
+        "import subprocess, sys, time, pathlib\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"pathlib.Path({str(child_pid)!r}).write_text(str(child.pid))\n"
+        "time.sleep(60)\n"
+    )
+    refresher = Refresher([sys.executable, "-c", script], tmp_path)
+    assert not refresher.stop()
+    refresher.start()
+    for _ in range(100):
+        if child_pid.exists() and child_pid.read_text():
+            break
+        time.sleep(0.05)
+    started = time.monotonic()
+    assert refresher.stop()
+    refresher.wait()
+    assert time.monotonic() - started < 5
+    status = refresher.status()
+    assert not status["running"] and status["last"] == "stopped from the dashboard"
+    time.sleep(0.2)
+    pid = int(child_pid.read_text())
+    try:
+        os.waitpid(pid, os.WNOHANG)
+    except ChildProcessError:
+        pass
+    try:
+        os.kill(pid, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    assert not alive
+
+
+def test_stop_endpoint_stops_the_refresher(tmp_path):
+    import sys
+    from dashboard.server import Refresher
+    db = tmp_path / "agent.db"
+    connect(db).close()
+    refresher = Refresher([sys.executable, "-c", "import time; time.sleep(60)"], tmp_path)
+    server = make_server(db, "127.0.0.1", 0, refresher)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        refresher.start()
+        response = httpx.post(f"http://127.0.0.1:{server.server_address[1]}/instahyre/stop")
+        assert response.status_code == 303 and response.headers["location"] == "/?view=instahyre"
+    finally:
+        server.shutdown()
+        server.server_close()
+    refresher.wait()
+    assert refresher.status()["last"] == "stopped from the dashboard"

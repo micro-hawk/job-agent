@@ -321,6 +321,9 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 .banner.tip { background: var(--blue-soft); border-color: transparent; }
 .banner.tip .icon { color: var(--blue); }
 .banner.live { background: linear-gradient(90deg, var(--accent-soft), var(--panel)); border-color: color-mix(in srgb, var(--accent) 35%, transparent); position: relative; overflow: hidden; }
+.banner-action { margin-left: auto; align-self: center; flex-shrink: 0; }
+.btn.danger { background: var(--bad); border-color: transparent; color: #fff; }
+.btn.danger:hover { filter: brightness(1.08); }
 .banner.live::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: 35%; background: var(--accent); border-radius: 99px; animation: scan 1.8s ease-in-out infinite; }
 .pulse { width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; flex: none; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 122, 47, 0.55); } 70% { box-shadow: 0 0 0 12px rgba(255, 122, 47, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 122, 47, 0); } }

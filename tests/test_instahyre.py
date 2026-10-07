@@ -93,8 +93,13 @@ class FakePage:
         self.closed = False
         self.intercepted = False
         self.broken = False
+        self.user_closes = False
 
     def goto(self, url, wait_until=None):
+        if self.user_closes:
+            from playwright.sync_api import Error
+            self.closed = True
+            raise Error("Target page, context or browser has been closed")
         if self.broken:
             from playwright.sync_api import Error
             raise Error("Page.goto: Timeout 30000ms exceeded")
@@ -114,6 +119,9 @@ class FakePage:
 
     def close(self):
         self.closed = True
+
+    def is_closed(self):
+        return self.closed
 
 
 def test_apply_one_clicks_apply_and_waits_for_confirmation():
@@ -185,3 +193,24 @@ def test_apply_queue_and_record_apply(conn):
     assert found["2"] == ("manual", "the Instahyre page did not load properly — check this one")
     assert found["3"][0] == "manual"
     assert [job["id"] for job in apply_queue(conn, 10)] == [queue[2]["id"], *[r["id"] for r in conn.execute("SELECT id FROM jobs WHERE external_id='3'")]]
+
+
+def test_apply_jobs_stops_when_you_close_the_tab(tmp_path):
+    from agent.discover.instahyre import apply_jobs
+    closing = FakePage("open")
+    closing.user_closes = True
+    pages = iter([closing, FakePage("open")])
+    results = []
+    stopped = apply_jobs(lambda: next(pages), [{"id": 1, "url": "u"}, {"id": 2, "url": "v"}], lambda *a: results.append(a), lambda s: None, 10, tmp_path / "STOP")
+    assert stopped == "you closed the Instahyre tab" and results == []
+
+
+def test_apply_jobs_stops_when_the_window_is_gone(tmp_path):
+    from playwright.sync_api import Error
+
+    from agent.discover.instahyre import apply_jobs
+
+    def gone():
+        raise Error("Target page, context or browser has been closed")
+
+    assert apply_jobs(gone, [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "the Instahyre window was closed"

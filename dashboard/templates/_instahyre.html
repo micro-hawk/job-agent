@@ -4,8 +4,11 @@
   <span class="pulse"></span>
   <div>
     <b>Working on Instahyre since {{ refresh.started_at[11:16] }}…</b>
-    <p>A Chrome window is open while it works, so don't close it. This page reloads every 10 seconds.</p>
+    <p>A Chrome window is open while it works. Press Stop, or close that window, to end the run. This page reloads every 10 seconds.</p>
   </div>
+  <form method="post" action="/instahyre/stop" class="banner-action" data-toast="Stopped the Instahyre run">
+    <button type="submit" class="btn danger">{{ icon('stop', 15) }} Stop</button>
+  </form>
 </div>
 {% else %}
 <div class="actions">

@@ -1,4 +1,6 @@
 import json
+import os
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -37,6 +39,17 @@ _ENV = Environment(loader=FileSystemLoader(TEMPLATES), autoescape=select_autoesc
 _ENV.filters["qp"] = quote_plus
 
 
+STOPPED_MESSAGE = "stopped from the dashboard"
+STOP_GRACE_SECONDS = 3
+
+
+def _signal_group(pid: int, sig: int) -> None:
+    try:
+        os.killpg(pid, sig)
+    except ProcessLookupError:
+        pass
+
+
 class Refresher:
     def __init__(self, command: list[str], cwd: Path):
         self.command = command
@@ -46,12 +59,15 @@ class Refresher:
         self._running = False
         self._started_at = ""
         self._last = ""
+        self._process = None
+        self._stopped = False
 
     def start(self, command: list[str] | None = None) -> bool:
         with self._lock:
             if self._running:
                 return False
             self._running = True
+            self._stopped = False
             self._started_at = datetime.now().isoformat(timespec="seconds")
             self._thread = threading.Thread(target=self._run, args=(command or self.command,), daemon=True)
             self._thread.start()
@@ -59,14 +75,32 @@ class Refresher:
 
     def _run(self, command: list[str]) -> None:
         try:
-            result = subprocess.run(command, cwd=self.cwd, capture_output=True, text=True)
-            lines = [line for line in (result.stdout + result.stderr).splitlines() if line.strip()]
-            last = lines[-1] if lines else f"exited with code {result.returncode}"
+            process = subprocess.Popen(command, cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+            with self._lock:
+                self._process = process
+            stdout, stderr = process.communicate()
+            lines = [line for line in (stdout + stderr).splitlines() if line.strip()]
+            last = lines[-1] if lines else f"exited with code {process.returncode}"
         except OSError as exc:
             last = f"could not start: {exc}"
         with self._lock:
-            self._last = last
+            self._last = STOPPED_MESSAGE if self._stopped else last
+            self._process = None
             self._running = False
+
+    def stop(self) -> bool:
+        with self._lock:
+            process = self._process
+            if not self._running or process is None:
+                return False
+            self._stopped = True
+        _signal_group(process.pid, signal.SIGTERM)
+        try:
+            process.wait(timeout=STOP_GRACE_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+        _signal_group(process.pid, signal.SIGKILL)
+        return True
 
     def wait(self) -> None:
         if self._thread:
@@ -222,6 +256,12 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             parts = urlparse(self.path).path.strip("/").split("/")
+            if parts == ["instahyre", "stop"]:
+                refresher.stop()
+                self.send_response(303)
+                self.send_header("Location", "/?view=instahyre")
+                self.end_headers()
+                return
             if len(parts) == 2 and parts[0] == "instahyre" and parts[1] in instahyre_actions:
                 refresher.start(instahyre_actions[parts[1]])
                 self.send_response(303)
