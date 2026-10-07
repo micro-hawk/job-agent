@@ -25,7 +25,7 @@ models:
 
 titles:
   allow:
-    - '^(\[[^\]]*\]\s*)?(((senior|sr\.?) )?software (engineer|developer)( (i|ii|iii|1|2|3)(\s+[a-z]+)*)?|(sde|software development engineer)([ -]?(ii|iii|2|3)(\s+[a-z]+)*)?|product engineer( (ii|iii|2|3))?|product software engineer( (i|ii|iii|1|2|3))?|((senior|sr\.?) )?(java back[ -]?end|java full[ -]?stack|java|back[ -]?end( software| systems)?) (developer|engineer)|full(\s*-\s*|\s)?stack java (developer|engineer)|full(\s*-\s*|\s)?stack (developer|engineer)\s*-\s*java)\s*($|[,\-–—|(:])'
+    - '^(\[[^\]]*\]\s*)?(((senior|sr\.?) )?software (engineer|developer)( (i|ii|iii|1|2|3)(\s+[a-z]+)*)?|((senior|sr\.?) )?(sde|software develope?ment engineer)([ -]?(ii|iii|2|3)(\s+[a-z]+)*)?|product engineer( (ii|iii|2|3))?|((senior|sr\.?) )?product (software|development) engineer( (i|ii|iii|1|2|3))?|((senior|sr\.?) )?(java back[ -]?end|java full[ -]?stack|java|back[ -]?end( software| systems)?) (developer|engineer)|full(\s*-\s*|\s)?stack java (developer|engineer)|full(\s*-\s*|\s)?stack (developer|engineer)\s*-\s*java)\s*($|[,\-–—|(:])'
   deny:
     - '\bin test\b'
     - '\b(intern|internship|new grad|graduate)\b'

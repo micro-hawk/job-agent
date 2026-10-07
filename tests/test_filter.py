@@ -34,6 +34,8 @@ ALLOWED = [
     "Software Development Engineer III", "SDE 3", "SDE III", "SDE-3", "Software Engineer II Backend", "SDE II Payments",
     "Backend Software Engineer", "Backend Systems Engineer", "Product Software Engineer", "Product Software Engineer II - (1071)",
     "Product Software Engineer - 1108", "Full Stack Java Developer", "Full - Stack Developer - Java", "Fullstack Java Engineer",
+    "Senior Software Development Engineer", "Senior Software Developement Engineer", "Senior Software Development Engineer - AI", "Sr. SDE - Cloud",
+    "Senior SDE 2", "Senior Product Software Engineer", "Sr. Product Software Engineer II - 947", "Sr. Product Development Engineer I - 1108",
 ]
 DENIED = [
     "Staff Software Engineer", "Staff Software Development Engineer - Java/Go", "Principal Engineer", "Engineering Manager",
