@@ -13,6 +13,7 @@ links:
   linkedin: https://linkedin.com/in/alex-morgan-example
   github: https://github.com/alex-morgan-example
   portfolio: https://alex-morgan.example.com
+resume_links: [linkedin, github, portfolio]
 total_experience_years: 4
 current_ctc:
   total_lpa: 16

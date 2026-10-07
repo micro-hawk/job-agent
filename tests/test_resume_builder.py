@@ -38,6 +38,12 @@ def test_rendering_escapes_resume_text():
     assert r"R\&D\_lead 100\%" in render_tex("classic", resume, PROFILE)
 
 
+def test_resume_links_choose_which_profile_links_the_resume_shows():
+    tex = render_tex("classic", RESUME, PROFILE | {"resume_links": ["linkedin", "portfolio"]})
+    assert "alex-morgan-example}" in tex and "alex-morgan.example.com" in tex and "github.com" not in tex
+    assert "github.com/alex-morgan-example" in render_tex("classic", RESUME, PROFILE)
+
+
 def test_render_rejects_unknown_templates():
     with pytest.raises(KeyError):
         render_tex("fancy", RESUME, PROFILE)

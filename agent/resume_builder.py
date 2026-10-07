@@ -109,12 +109,13 @@ def render_tex(template: str, resume: dict, profile: dict) -> str:
     if template not in TEMPLATES:
         raise KeyError(template)
     location = profile.get("location") or {}
+    links, shown = profile.get("links") or {}, profile.get("resume_links")
     contact = {
         "name": profile.get("name", ""),
         "email": profile.get("email", ""),
         "phone": profile.get("phone", ""),
         "location": ", ".join(part for part in (location.get("city"), location.get("country")) if part),
-        "links": [url for url in (profile.get("links") or {}).values() if url],
+        "links": [url for key, url in links.items() if url and (shown is None or key in shown)],
     }
     return with_engine("", "xelatex") + (_ENV.get_template(f"{template}.tex.j2").render(contact=contact, resume=resume | {
         "skills": resume.get("skills") or [], "experience": resume.get("experience") or [],
