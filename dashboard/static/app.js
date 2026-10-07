@@ -384,7 +384,96 @@
       return busy;
     }
 
-    setupDraftScore(root, recompile, () => dirty || status.classList.contains("bad") || frame.hidden);
+    const ENGINE_LINE = /^%\s*!TEX\s+(?:TS-)?program\s*=\s*(\w+)/;
+    const engineSelect = root.querySelector("[data-engine]");
+    const overleafEngine = root.querySelector("[data-overleaf-engine]");
+
+    function engineOf(tex) {
+      const match = tex.match(ENGINE_LINE);
+      const engine = match && match[1].toLowerCase();
+      return engine === "lualatex" ? "lualatex" : "xelatex";
+    }
+
+    function replaceAll(next) {
+      if (!editor) {
+        textarea.value = next;
+        setDirty(true);
+        return;
+      }
+      const scroll = editor.getScrollInfo();
+      editor.replaceRange(next, { line: 0, ch: 0 }, { line: editor.lastLine() });
+      editor.scrollTo(scroll.left, scroll.top);
+    }
+
+    engineSelect.addEventListener("change", () => {
+      const line = "% !TEX program = " + engineSelect.value;
+      const tex = value();
+      if (editor && ENGINE_LINE.test(editor.getLine(0))) editor.replaceRange(line, { line: 0, ch: 0 }, { line: 0 });
+      else if (editor) editor.replaceRange(line + "\n", { line: 0, ch: 0 });
+      else replaceAll(ENGINE_LINE.test(tex) ? tex.replace(/^[^\n]*/, line) : line + "\n" + tex);
+      overleafEngine.value = engineSelect.value;
+      recompile();
+    });
+    if (editor) editor.on("change", () => { engineSelect.value = engineOf(editor.getLine(0)); });
+
+    function fixNote(note, kind, text, changes) {
+      note.hidden = false;
+      note.className = "fix-note " + kind;
+      note.textContent = text;
+      (changes || []).forEach(change => {
+        const row = document.createElement("div");
+        row.className = "fix-change";
+        const label = document.createElement("b");
+        label.textContent = change.label;
+        const before = document.createElement("del");
+        before.textContent = change.before;
+        const after = document.createElement("ins");
+        after.textContent = change.after;
+        row.append(label, before, after);
+        note.append(row);
+      });
+    }
+
+    async function applyFix(button) {
+      const note = button.closest("li").querySelector("[data-fix-note]");
+      const label = button.querySelector("span");
+      const sent = value();
+      button.disabled = true;
+      button.classList.add("working");
+      label.textContent = "Applying…";
+      note.hidden = true;
+      try {
+        const response = await fetch(button.dataset.applyFix, {
+          method: "POST",
+          headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: new URLSearchParams({ tex: sent, fix: button.dataset.fix }),
+        });
+        if (!response.ok) throw new Error("The server answered " + response.status);
+        const reply = await response.json();
+        if (!reply.ok) throw new Error(reply.error);
+        if (!reply.changes.length) {
+          fixNote(note, "muted", reply.message);
+          label.textContent = "Apply fix";
+          button.disabled = false;
+          return;
+        }
+        if (value() !== sent) throw new Error("You edited the file while this fix was being written. Apply it again.");
+        replaceAll(reply.tex);
+        const count = reply.changes.length;
+        fixNote(note, "ok", "Updated " + count + (count === 1 ? " line" : " lines") + " in main.tex · ⌘Z in the editor undoes it. Check the score again to see the effect.", reply.changes);
+        label.textContent = "Applied";
+        button.classList.add("done");
+        recompile();
+      } catch (failure) {
+        fixNote(note, "bad", "Could not apply this fix: " + failure.message);
+        label.textContent = "Apply fix";
+        button.disabled = false;
+      } finally {
+        button.classList.remove("working");
+      }
+    }
+
+    setupDraftScore(root, recompile, () => dirty || status.classList.contains("bad") || frame.hidden, applyFix);
 
     root.querySelector("[data-recompile]").addEventListener("click", recompile);
     form.addEventListener("submit", event => { event.preventDefault(); recompile(); });
@@ -396,6 +485,7 @@
     });
     root.querySelector("[data-overleaf]").addEventListener("submit", event => {
       event.currentTarget.querySelector("input[name=snip]").value = value();
+      overleafEngine.value = engineOf(value());
     });
     root.querySelector("[data-download-tex]").addEventListener("click", event => {
       if (!dirty) return;
@@ -420,7 +510,7 @@
     }
   }
 
-  function setupDraftScore(root, recompile, needsCompile) {
+  function setupDraftScore(root, recompile, needsCompile, applyFix) {
     const panel = root.querySelector("[data-rb-ats]");
     const toggle = root.querySelector("[data-ats-toggle]");
     const form = panel.querySelector("[data-rb-ats-form]");
@@ -437,6 +527,10 @@
       if (next) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     toggle.addEventListener("click", () => open(panel.hidden));
+    result.addEventListener("click", event => {
+      const button = event.target.closest("[data-apply-fix]");
+      if (button && !button.disabled) applyFix(button);
+    });
     panel.querySelector("[data-ats-close]").addEventListener("click", () => open(false));
 
     function fail(text) {

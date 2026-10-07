@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 {% macro band(score) -%}{{ 'good' if score >= 75 else 'mid' if score >= 55 else 'low' }}{%- endmacro %}
 
 {% macro verdict(score) -%}{{ 'Strong match' if score >= 75 else 'Good, with gaps' if score >= 55 else 'Needs work' }}{%- endmacro %}
@@ -39,7 +40,9 @@
 
 {% endmacro %}
 
-{% macro fix_list(r) %}
+{% macro fix_list(r, apply="") %}
       <h3>Top fixes</h3>
-      <ol class="ats-fixes">{% for fix in r.fixes %}<li style="--i: {{ loop.index0 }}"><span>{{ loop.index }}</span><p>{{ fix }}</p></li>{% endfor %}</ol>
+      <ol class="ats-fixes">{% for fix in r.fixes %}<li style="--i: {{ loop.index0 }}"><span>{{ loop.index }}</span>
+        {%- if apply %}<div class="fix-body"><p>{{ fix }}</p><div class="fix-note" data-fix-note hidden></div></div><button type="button" class="btn small fix-apply" data-apply-fix="{{ apply }}" data-fix="{{ fix }}">{{ icon('sparkle', 13) }} <span>Apply fix</span></button>
+        {%- else %}<p>{{ fix }}</p>{% endif %}</li>{% endfor %}</ol>
 {% endmacro %}

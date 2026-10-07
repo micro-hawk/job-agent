@@ -14,4 +14,4 @@
   </div>
 </div>
 {{ breakdown(r) }}
-{% if r.fixes %}<div class="ats-section">{{ fix_list(r) }}</div>{% endif %}
+{% if r.fixes %}<div class="ats-section">{{ fix_list(r, "/resume/%d/fix" % draft_id) }}</div>{% endif %}

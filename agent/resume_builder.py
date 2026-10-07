@@ -14,6 +14,8 @@ TEMPLATES = {
     "modern": ("Modern", "Sans-serif with a coloured accent on the name and section rules."),
     "compact": ("Compact", "Tighter margins and spacing to keep a long history on one page."),
 }
+ENGINES = {"xelatex": "XeLaTeX", "lualatex": "LuaLaTeX"}
+ENGINE_LINE = re.compile(r"\A%\s*!TEX\s+(?:TS-)?program\s*=\s*(\w+)[^\n]*\n?")
 COMPILE_TIMEOUT = 90
 NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 TEX_LINE = re.compile(r"\.tex:(\d+):")
@@ -22,6 +24,17 @@ SPECIALS = {
     "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
 }
 SPECIAL = re.compile("|".join(re.escape(char) for char in SPECIALS))
+UNESCAPE = re.compile("|".join(re.escape(escaped) for escaped in sorted(SPECIALS.values(), key=len, reverse=True)))
+PLAIN = {escaped: char for char, escaped in SPECIALS.items()}
+FIX_SYSTEM = (
+    "You apply one fix from an ATS review to a resume. You get the fix, the editable resume lines as tagged plain text "
+    "and the person's master resume, which holds every fact you may use. Rewrite only tagged lines, and only the ones the "
+    "fix is about. Rules: reword, tighten or reorder what the line already says, or bring in wording that the master "
+    "resume states about that same role or project; never add employers, roles, tools, metrics, team sizes or results "
+    "that the master resume does not state; never introduce a number that is not already there; plain text only, no "
+    "markdown or LaTeX; keep each bullet to one or two lines. If the fix needs facts the master resume does not have, "
+    "return no changes."
+)
 SYSTEM = (
     "You improve resume wording. You get a resume as tagged lines and a list of fixes from an ATS review. Propose "
     "rewrites that apply the fixes, only for the tagged lines: headline, summary and bullet ids. Rules: reword, tighten "
@@ -103,10 +116,103 @@ def render_tex(template: str, resume: dict, profile: dict) -> str:
         "location": ", ".join(part for part in (location.get("city"), location.get("country")) if part),
         "links": [url for url in (profile.get("links") or {}).values() if url],
     }
-    return _ENV.get_template(f"{template}.tex.j2").render(contact=contact, resume=resume | {
+    return with_engine("", "xelatex") + (_ENV.get_template(f"{template}.tex.j2").render(contact=contact, resume=resume | {
         "skills": resume.get("skills") or [], "experience": resume.get("experience") or [],
         "projects": resume.get("projects") or [], "education": resume.get("education") or [],
-    })
+    }))
+
+
+def engine_of(tex: str) -> str:
+    match = ENGINE_LINE.match(tex)
+    return match.group(1).lower() if match and match.group(1).lower() in ENGINES else "xelatex"
+
+
+def with_engine(tex: str, engine: str) -> str:
+    if engine not in ENGINES:
+        raise KeyError(engine)
+    return f"% !TEX program = {engine}\n" + ENGINE_LINE.sub("", tex, count=1)
+
+
+def _group(tex: str, start: int) -> int | None:
+    depth = 0
+    index = start
+    while index < len(tex):
+        char = tex[index]
+        if char == "\\":
+            index += 2
+            continue
+        depth += {"{": 1, "}": -1}.get(char, 0)
+        if depth == 0:
+            return index
+        index += 1
+    return None
+
+
+def _plain(latex: str) -> str | None:
+    if re.search(r"[\\{}]", UNESCAPE.sub("", latex)):
+        return None
+    return " ".join(UNESCAPE.sub(lambda match: PLAIN[match.group()], latex).split())
+
+
+def _heading(tex: str, command: str) -> str:
+    start = tex.find("{", tex.find(command) + len(command) - 1)
+    args = []
+    while len(args) < 3 and start < len(tex) and tex[start] == "{":
+        end = _group(tex, start)
+        if end is None:
+            break
+        args.append(tex[start + 1:end])
+        start = end + 1
+    if command == "\\resumeProjectHeading":
+        name = re.search(r"\\textbf\{([^{}]*)\}", args[0]) if args else None
+        return f"{_plain(name.group(1)) if name else 'Project'} project"
+    return f"{_plain(args[2]) if len(args) > 2 else 'Experience'} bullet"
+
+
+def tex_targets(tex: str) -> dict[str, dict]:
+    targets = {}
+    summary = re.search(r"\\section\{Summary\}[ \t]*\n(.+?)(?=\n[ \t]*\n|\n\\|\Z)", tex, re.S)
+    if summary and (text := _plain(summary.group(1))):
+        targets["summary"] = {"label": "Summary", "text": text, "start": summary.start(1), "end": summary.end(1)}
+    label, count = "Bullet", 0
+    for match in re.finditer(r"\\resumeSubheading|\\resumeProjectHeading|\\resumeItem\{", tex):
+        if match.group() != "\\resumeItem{":
+            label = _heading(tex[match.start():], match.group())
+            continue
+        if tex[:match.start()].endswith("newcommand{"):
+            continue
+        end = _group(tex, match.end() - 1)
+        if end is None:
+            continue
+        count += 1
+        if text := _plain(tex[match.end():end]):
+            targets[f"b{count}"] = {"label": label, "text": text, "start": match.end(), "end": end}
+    return targets
+
+
+def propose_tex_fix(tex: str, resume: dict, fix: str, llm, model: str) -> list[dict]:
+    targets = tex_targets(tex)
+    known_numbers = set(NUMBER.findall(json.dumps(resume, ensure_ascii=False)))
+    lines = "\n".join(f"[{key}] ({target['label']}) {target['text']}" for key, target in targets.items())
+    prompt = f"Fix to apply:\n{fix}\n\nEditable lines:\n{lines}\n\nMaster resume:\n{_resume_lines(resume)}"
+    changes, seen = [], set()
+    for change in llm.call("resume_fix", model, FIX_SYSTEM, prompt, SCHEMA).get("changes", []):
+        target, after = str(change.get("target", "")).strip().strip("[]"), " ".join(str(change.get("after", "")).split())
+        if target not in targets or target in seen or not after or after == targets[target]["text"]:
+            continue
+        if set(NUMBER.findall(after)) - known_numbers - set(NUMBER.findall(targets[target]["text"])):
+            continue
+        seen.add(target)
+        changes.append({"target": target, "label": targets[target]["label"], "before": targets[target]["text"], "after": after})
+    return changes
+
+
+def apply_tex_fix(tex: str, changes: list[dict]) -> str:
+    targets = tex_targets(tex)
+    edits = sorted(((targets[c["target"]], c["after"]) for c in changes if c["target"] in targets), key=lambda edit: edit[0]["start"], reverse=True)
+    for target, after in edits:
+        tex = tex[:target["start"]] + latex_escape(after) + tex[target["end"]:]
+    return tex
 
 
 def _targets(resume: dict) -> dict[str, tuple[str, str]]:
@@ -165,16 +271,22 @@ def apply_changes(resume: dict, changes: list[dict]) -> dict:
 def compile_tex(tex: str, runner=subprocess.run, timeout: int = COMPILE_TIMEOUT, binary: str = "tectonic") -> bytes:
     with tempfile.TemporaryDirectory(prefix="resume-") as workdir:
         Path(workdir, "main.tex").write_text(tex, encoding="utf-8")
+        if engine_of(tex) == "lualatex":
+            cmd = ["lualatex", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "-no-shell-escape", "main.tex"]
+            missing = "LuaLaTeX is not installed. Install MacTeX or BasicTeX, or switch the engine to XeLaTeX"
+        else:
+            cmd = [binary, "--untrusted", "--chatter", "minimal", "--outdir", workdir, "main.tex"]
+            missing = "Tectonic is not installed. Install it with: brew install tectonic"
         try:
-            result = runner([binary, "--untrusted", "--chatter", "minimal", "--outdir", workdir, "main.tex"], cwd=workdir, capture_output=True, text=True, timeout=timeout)
+            result = runner(cmd, cwd=workdir, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             raise CompileError(f"LaTeX took too long to compile (over {timeout} seconds)") from exc
         except FileNotFoundError as exc:
-            raise CompileError("Tectonic is not installed. Install it with: brew install tectonic") from exc
+            raise CompileError(missing) from exc
         pdf = Path(workdir, "main.pdf")
         if result.returncode != 0 or not pdf.exists():
             log = f"{result.stdout or ''}\n{result.stderr or ''}"
-            errors = [line.strip() for line in log.splitlines() if line.strip().lower().startswith("error")]
+            errors = [line.strip() for line in log.splitlines() if line.strip().lower().startswith("error") or TEX_LINE.search(line)]
             errors = [error for error in errors if TEX_LINE.search(error)] or errors
             line = next((int(match.group(1)) for error in errors if (match := TEX_LINE.search(error))), None)
             raise CompileError("\n".join(errors[:6]) or log.strip()[-800:] or "LaTeX could not compile this file", line)

@@ -116,12 +116,15 @@
     <span class="rb-status {{ 'bad' if draft.error else 'ok' }}" data-status>{{ 'Compile error' if draft.error else 'Compiled' }}</span>
     <div class="rb-actions">
       <button type="button" class="btn primary small" data-recompile title="Recompile (⌘S)">{{ icon('play', 13) }} Recompile <kbd>⌘S</kbd></button>
+      <label class="rb-engine" title="LaTeX engine, kept in the % !TEX program line at the top of the file">
+        <select data-engine aria-label="LaTeX engine">{% for key, label in b.engines.items() %}<option value="{{ key }}"{{ ' selected' if key == b.engine else '' }}>{{ label }}</option>{% endfor %}</select>
+      </label>
       <button type="button" class="btn small" data-ats-toggle aria-expanded="false">{{ icon('gauge', 13) }} ATS score</button>
       <a class="btn small" href="/resume/{{ draft.id }}.tex?download=1" data-download-tex>{{ icon('download', 13) }} .tex</a>
       <a class="btn small" href="/resume/{{ draft.id }}.pdf?download=1" data-download-pdf{{ ' hidden' if not b.has_pdf else '' }}>{{ icon('download', 13) }} PDF</a>
       <form method="post" action="https://www.overleaf.com/docs" target="_blank" rel="noopener" data-overleaf>
         <input type="hidden" name="snip" value="">
-        <input type="hidden" name="engine" value="xelatex">
+        <input type="hidden" name="engine" value="{{ b.engine }}" data-overleaf-engine>
         <input type="hidden" name="snip_name" value="resume.tex">
         <button type="submit" class="btn small">{{ icon('external', 13) }} Open in Overleaf</button>
       </form>

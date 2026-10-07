@@ -471,7 +471,7 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 .ats-fixes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ats-fixes li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); animation: rise .4s ease both; animation-delay: calc(var(--i) * 80ms + 500ms); transition: border-color .2s, transform .2s; }
 .ats-fixes li:hover { border-color: var(--accent); transform: translateX(2px); }
-.ats-fixes li span { flex-shrink: 0; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.ats-fixes li > span { flex-shrink: 0; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
 .ats-fixes p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; }
 
 .ats-placeholder { text-align: center; padding: 40px 28px; }
@@ -702,3 +702,18 @@ textarea[data-tex] { flex: 1; width: 100%; min-height: 72vh; border: 0; resize: 
 .rb-delta.up span { background: var(--green-soft); color: var(--green); }
 .rb-delta.down span { background: var(--bad-soft); color: var(--bad); }
 .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+.rb-engine select { font: inherit; font-size: 12.5px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.rb-engine select:hover { border-color: var(--muted); }
+.fix-body { flex: 1; min-width: 0; }
+.fix-apply { flex-shrink: 0; align-self: center; }
+.fix-apply.working { opacity: .7; cursor: progress; }
+.fix-apply.done { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+.fix-note { margin-top: 8px; font-size: 12.5px; line-height: 1.5; }
+.fix-note.ok { color: var(--green); }
+.fix-note.bad { color: var(--bad); }
+.fix-change { display: grid; gap: 2px; margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--fg); }
+.fix-change b { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.fix-change del { color: var(--muted); }
+.fix-change ins { text-decoration: none; color: var(--fg); }
+@media (max-width: 640px) { .ats-fixes li:has(.fix-apply) { flex-wrap: wrap; } .fix-body { flex-basis: calc(100% - 36px); } .fix-apply { margin-left: 36px; } }

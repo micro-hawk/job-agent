@@ -5,7 +5,8 @@ import httpx
 
 from agent.ats import record_check
 from agent.db import connect
-from agent.resume_builder import CompileError, create_draft, get_draft
+from agent.llm import LLMError
+from agent.resume_builder import CompileError, create_draft, get_draft, render_tex, tex_targets, with_engine
 from dashboard.server import make_server, render
 
 from tests.fakes import NOW, StubLLM
@@ -189,3 +190,70 @@ def test_draft_scoring_needs_a_compiled_pdf_and_a_level(tmp_path):
     assert missing == {"ok": False, "error": "Compile the resume without errors first"}
     assert no_level == {"ok": False, "error": "Choose an experience level"}
     assert master["ok"] and master["baseline"] is None and unknown == 404 and len(llm.calls) == 1
+
+
+def test_score_fixes_offer_apply_buttons_and_the_editor_shows_the_engine(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    tex = with_engine(render_tex("classic", RESUME, PROFILE), "lualatex")
+    draft_id = create_draft(conn, "Draft", "classic", "master", NOW, tex=tex)
+    server, base = serve(db, llm=ats_llm(), compiler=pdf_compiler())
+    try:
+        httpx.post(f"{base}/resume/{draft_id}/save", data={"tex": tex}, headers={"Accept": "application/json"})
+        editor = httpx.get(f"{base}/?view=resume&draft={draft_id}").text
+        result = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "mid"}).json()
+    finally:
+        stop(server)
+    assert 'data-engine' in editor and '<option value="lualatex" selected>LuaLaTeX</option>' in editor
+    assert 'name="engine" value="lualatex"' in editor
+    assert f'data-apply-fix="/resume/{draft_id}/fix"' in result["html"] and 'data-fix="Add a Golang project"' in result["html"]
+
+
+def test_apply_fix_rewrites_the_posted_tex_without_saving_it(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    saved = render_tex("classic", RESUME, PROFILE)
+    draft_id = create_draft(conn, "Draft", "classic", "master", NOW, tex=saved)
+    edited = saved.replace("Introduced a Redis cache", "Put a Redis cache")
+    bullet = next(key for key, t in tex_targets(edited).items() if t["text"].startswith("Put a Redis"))
+    llm = StubLLM({"resume_fix": lambda prompt: {"changes": [{"target": bullet, "after": "Put a Redis cache & index in front of the clinic directory API.", "fix": "x"}]}})
+    server, base = serve(db, llm=llm)
+    try:
+        reply = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": edited, "fix": "Show impact"}).json()
+    finally:
+        stop(server)
+    assert reply["ok"] and reply["changes"] == [{"label": "Contoso Health bullet", "before": "Put a Redis cache in front of the clinic directory API.", "after": "Put a Redis cache & index in front of the clinic directory API."}]
+    assert reply["tex"] == edited.replace("Put a Redis cache in front", r"Put a Redis cache \& index in front")
+    assert "Show impact" in llm.calls[0][2] and get_draft(conn, draft_id)["tex"] == saved
+
+
+def test_apply_fix_says_when_it_needs_new_facts_or_fails(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    draft_id = create_draft(conn, "Draft", "classic", "master", NOW, tex="x")
+    tex = render_tex("classic", RESUME, PROFILE)
+    nothing = StubLLM({"resume_fix": lambda prompt: {"changes": []}})
+    server, base = serve(db, llm=nothing)
+    try:
+        none = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": tex, "fix": "Add a Golang project"}).json()
+        blank = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": tex, "fix": " "}).json()
+        plain = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": "\\documentclass{article}", "fix": "Tighten"}).json()
+    finally:
+        stop(server)
+    assert none == {"ok": True, "changes": [], "tex": tex, "message": "This fix needs facts that aren't in your master resume. Edit it yourself."}
+    assert blank == {"ok": False, "error": "Choose a fix to apply"}
+    assert plain == {"ok": False, "error": "No summary or bullet lines found to rewrite in this LaTeX"}
+    assert len(nothing.calls) == 1
+    failing = StubLLM({"resume_fix": lambda prompt: LLMError("budget reached")})
+    server, base = serve(db, llm=failing, loader=lambda: (_ for _ in ()).throw(OSError("missing")))
+    try:
+        broken = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": tex, "fix": "Tighten"}).json()
+    finally:
+        stop(server)
+    assert broken == {"ok": False, "error": "could not read your master resume: missing"}
+    server, base = serve(db, llm=failing)
+    try:
+        failed = httpx.post(f"{base}/resume/{draft_id}/fix", data={"tex": tex, "fix": "Tighten"}).json()
+    finally:
+        stop(server)
+    assert failed == {"ok": False, "error": "rewriting failed: budget reached"}

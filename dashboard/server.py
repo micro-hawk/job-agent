@@ -25,8 +25,8 @@ from agent.db import connect, update_job
 from agent.llm import LLM, LLMError
 from agent.profile import load_profile, load_resume
 from agent.resume_builder import (
-    TEMPLATES as RESUME_TEMPLATES, CompileError, apply_changes, compile_tex, create_draft, delete_draft, get_draft, list_drafts,
-    propose_changes, render_tex, update_draft,
+    ENGINES, TEMPLATES as RESUME_TEMPLATES, CompileError, apply_changes, apply_tex_fix, compile_tex, create_draft, delete_draft,
+    engine_of, get_draft, list_drafts, propose_changes, propose_tex_fix, render_tex, tex_targets, update_draft,
 )
 from agent.models import ALERT_SOURCES
 from agent.questionnaire import REASONS
@@ -35,6 +35,7 @@ TEMPLATES = Path(__file__).parent / "templates"
 STATIC = Path(__file__).parent / "static"
 STATIC_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png"}
 CHART_DAYS = 14
+NO_FIX = "This fix needs facts that aren't in your master resume. Edit it yourself."
 PROJECT_ROOT = Path(__file__).parent.parent
 INSTAHYRE_COMMAND = [sys.executable, "-m", "agent.run", "instahyre"]
 INSTAHYRE_APPLIED_COMMAND = INSTAHYRE_COMMAND + ["--applied"]
@@ -230,6 +231,8 @@ def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
         "draft": draft,
         "source_check": _source_check(conn, draft),
         "levels": {key: value[0] for key, value in LEVELS.items()},
+        "engines": ENGINES,
+        "engine": engine_of(draft["tex"]) if draft else "xelatex",
         "has_pdf": bool(builder.get("has_pdf")),
         "error": builder.get("error", ""),
     }
@@ -414,8 +417,27 @@ def score_draft(conn: sqlite3.Connection, draft: dict, form: dict, pdf: Path, ll
         return {"ok": False, "error": f"scoring failed: {exc}"}
     source = _source_check(conn, draft)
     baseline = {"score": source["score"], "filename": source["filename"]} if source else None
-    html = _ENV.get_template("_draft_score.html").render(r=result, baseline=baseline, level_label=LEVELS[level][0])
+    html = _ENV.get_template("_draft_score.html").render(r=result, baseline=baseline, level_label=LEVELS[level][0], draft_id=draft["id"])
     return {"ok": True, "score": result["score"], "baseline": baseline, "html": html}
+
+
+def fix_draft(form: dict, loader, llm, model: str) -> dict:
+    tex, fix = form.get("tex", [""])[0], form.get("fix", [""])[0].strip()
+    if not fix:
+        return {"ok": False, "error": "Choose a fix to apply"}
+    if not tex_targets(tex):
+        return {"ok": False, "error": "No summary or bullet lines found to rewrite in this LaTeX"}
+    try:
+        resume, _ = loader()
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return {"ok": False, "error": f"could not read your master resume: {exc}"}
+    try:
+        changes = propose_tex_fix(tex, resume, fix, llm, model)
+    except LLMError as exc:
+        return {"ok": False, "error": f"rewriting failed: {exc}"}
+    if not changes:
+        return {"ok": True, "changes": [], "tex": tex, "message": NO_FIX}
+    return {"ok": True, "tex": apply_tex_fix(tex, changes), "changes": [{key: change[key] for key in ("label", "before", "after")} for change in changes]}
 
 
 def compile_draft(conn: sqlite3.Connection, draft_id: int, tex: str, compiler, pdf_dir: Path, now: str) -> dict:
@@ -541,7 +563,7 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                     self.redirect(f"/?view=resume&draft={draft_id}" if draft_id else "/?view=resume")
                     return
                 draft = get_draft(conn, int(parts[1])) if len(parts) == 3 and parts[1].isdigit() else None
-                if not draft or parts[2] not in ("generate", "save", "delete", "ats"):
+                if not draft or parts[2] not in ("generate", "save", "delete", "ats", "fix"):
                     self.send_error(404)
                     return
                 if parts[2] == "delete":
@@ -554,6 +576,9 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                         tex = generate_resume(conn, draft, set(form.get("accept", [])), resume_loader, now)
                         compile_draft(conn, draft["id"], tex, compiler, pdf_dir, now)
                     self.redirect(f"/?view=resume&draft={draft['id']}")
+                    return
+                if parts[2] == "fix":
+                    self.send_json(fix_draft(form, resume_loader, llm_factory(conn), ats_model))
                     return
                 if parts[2] == "ats":
                     self.send_json(score_draft(conn, draft, form, pdf_dir / f"{draft['id']}.pdf", llm_factory(conn), ats_model))
