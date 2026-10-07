@@ -106,7 +106,8 @@ class FakePage:
         self.visited = url
 
     def wait_for_timeout(self, ms):
-        pass
+        if getattr(self, "urls_after_poll", None):
+            self.url = self.urls_after_poll.pop(0)
 
     def inner_text(self, selector):
         return self.text
@@ -214,3 +215,72 @@ def test_apply_jobs_stops_when_the_window_is_gone(tmp_path):
         raise Error("Target page, context or browser has been closed")
 
     assert apply_jobs(gone, [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "the Instahyre window was closed"
+
+
+class FakeContext:
+    def __init__(self, page):
+        self.page = page
+        self.pages = [page]
+        self.closed = False
+
+    def new_page(self):
+        return self.page
+
+    def close(self):
+        self.closed = True
+
+
+def fake_launcher(*pages):
+    queue = list(pages)
+    launches = []
+
+    def launch(headless):
+        context = FakeContext(queue.pop(0))
+        launches.append((headless, context))
+        return context
+
+    return launch, launches
+
+
+LOGIN_URL = "https://www.instahyre.com/login/"
+
+
+def test_open_session_stays_hidden_when_signed_in():
+    from agent.discover.instahyre import open_session
+    launch, launches = fake_launcher(FakePage("open"))
+    context, page = open_session(launch, login_polls=3)
+    assert [headless for headless, _ in launches] == [True]
+    assert context is launches[0][1] and not context.closed
+
+
+def test_open_session_shows_a_window_only_to_sign_in_then_goes_hidden():
+    from agent.discover.instahyre import open_session
+    login = FakePage("open", url=LOGIN_URL)
+    signing_in = FakePage("open", url=LOGIN_URL)
+    signing_in.urls_after_poll = ["https://www.instahyre.com/candidate/opportunities/"]
+    launch, launches = fake_launcher(login, signing_in, FakePage("open"))
+    context, _ = open_session(launch, login_polls=3)
+    assert [headless for headless, _ in launches] == [True, False, True]
+    assert launches[0][1].closed and launches[1][1].closed and not context.closed
+
+
+def test_open_session_gives_up_when_you_do_not_sign_in():
+    import pytest
+    from agent.discover.instahyre import InstahyreBlocked, open_session
+    launch, launches = fake_launcher(FakePage("open", url=LOGIN_URL), FakePage("open", url=LOGIN_URL))
+    with pytest.raises(InstahyreBlocked, match="not signed in"):
+        open_session(launch, login_polls=3)
+    assert all(context.closed for _, context in launches)
+
+
+def test_open_session_falls_back_to_a_window_when_hidden_run_is_challenged_and_never_passes_a_challenge():
+    import pytest
+    from agent.discover.instahyre import InstahyreBlocked, open_session
+    launch, launches = fake_launcher(FakePage("open", text="Just a moment"), FakePage("open"))
+    context, _ = open_session(launch, login_polls=3)
+    assert [headless for headless, _ in launches] == [True, False] and not context.closed
+
+    launch, launches = fake_launcher(FakePage("open", text="Just a moment"), FakePage("open", text="Just a moment"))
+    with pytest.raises(InstahyreBlocked, match="Cloudflare"):
+        open_session(launch, login_polls=3)
+    assert all(context.closed for _, context in launches)

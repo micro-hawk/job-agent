@@ -100,9 +100,6 @@ def instahyre_apply_command(limit: int) -> int:
     from agent.discover.instahyre import PROFILE_DIR_NAME, apply_on_instahyre, apply_queue, record_apply
 
     profile_dir = DATA_DIR / PROFILE_DIR_NAME
-    if not profile_dir.exists():
-        print("instahyre: no saved session; log in once first")
-        return 1
     conn = connect(DB_PATH)
     outcomes = Counter()
 
@@ -123,9 +120,6 @@ def instahyre_command(settings: dict, applied_only: bool = False) -> int:
     )
 
     profile_dir = DATA_DIR / PROFILE_DIR_NAME
-    if not profile_dir.exists():
-        print("instahyre: no saved session; log in once first")
-        return 1
     facets = (APPLIED_FACET,) if applied_only else (RECOMMENDED_FACET, APPLIED_FACET)
     try:
         lists = fetch_facets(profile_dir, facets)

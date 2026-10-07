@@ -4,7 +4,7 @@
   <span class="pulse"></span>
   <div>
     <b>Working on Instahyre since {{ refresh.started_at[11:16] }}…</b>
-    <p>A Chrome window is open while it works. Press Stop, or close that window, to end the run. This page reloads every 10 seconds.</p>
+    <p>This runs in the background. A Chrome window opens only if you need to sign in to Instahyre. Press Stop to end the run. This page reloads every 10 seconds.</p>
   </div>
   <form method="post" action="/instahyre/stop" class="banner-action" data-toast="Stopped the Instahyre run">
     <button type="submit" class="btn danger">{{ icon('stop', 15) }} Stop</button>
@@ -12,7 +12,7 @@
 </div>
 {% else %}
 <div class="actions">
-  <form method="post" action="/instahyre/apply" class="action primary" onsubmit="return confirm('Apply on Instahyre to up to 40 jobs in this tab, one by one?')" data-toast="Applying on Instahyre. A Chrome window will open.">
+  <form method="post" action="/instahyre/apply" class="action primary" onsubmit="return confirm('Apply on Instahyre to up to 40 jobs in this tab, one by one?')" data-toast="Applying on Instahyre in the background.">
     <button type="submit">
       <span class="action-icon">{{ icon('zap', 20) }}</span>
       <span><b>Apply to all in tab</b><small>Opens each job, clicks Apply now, closes the tab and moves on. Up to 40 per click.</small></span>

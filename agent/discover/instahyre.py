@@ -29,6 +29,7 @@ MATCHES_PAGE = BASE_URL + "/candidate/opportunities/?matching=true"
 MATCHES_API = BASE_URL + "/api/v1/candidate_opportunities/candidate_matching?interest_facet={facet}&limit=30&offset={offset}"
 RECOMMENDED_FACET = 0
 APPLIED_FACET = 1
+LOGGED_OUT = "logged out"
 CHALLENGE_MARKERS = ("Performing security verification", "Verify you are human", "Just a moment")
 MAX_PAGES = 20
 
@@ -41,7 +42,7 @@ def blocked_reason(url: str, text: str) -> str:
     if any(marker in text for marker in CHALLENGE_MARKERS):
         return "Cloudflare human check"
     if "/login" in url:
-        return "logged out"
+        return LOGGED_OUT
     return ""
 
 
@@ -89,18 +90,72 @@ def mark_applied_on_instahyre(conn, applied_rows: list[dict], now: str) -> int:
     return len(done)
 
 
+NOT_SIGNED_IN = "not signed in to Instahyre (the sign-in window was left open or closed)"
+LOGIN_POLL_MS = 2000
+LOGIN_POLLS = 150
+
+
+def check_session(page) -> str:
+    page.goto(MATCHES_PAGE, wait_until="domcontentloaded")
+    page.wait_for_timeout(5000)
+    return blocked_reason(page.url, page.inner_text("body"))
+
+
+def wait_for_login(page, polls: int) -> bool:
+    page.goto(MATCHES_PAGE, wait_until="domcontentloaded")
+    for _ in range(polls):
+        try:
+            page.wait_for_timeout(LOGIN_POLL_MS)
+            if not blocked_reason(page.url, page.inner_text("body")):
+                return True
+        except PlaywrightError:
+            if page.is_closed():
+                return False
+    return False
+
+
+def _first_page(context):
+    return context.pages[0] if context.pages else context.new_page()
+
+
+def _session_or_close(context) -> tuple[str, object]:
+    page = _first_page(context)
+    reason = check_session(page)
+    if reason:
+        context.close()
+    return reason, page
+
+
+def open_session(launch, login_polls: int = LOGIN_POLLS):
+    context = launch(headless=True)
+    reason, page = _session_or_close(context)
+    if not reason:
+        return context, page
+    if reason == LOGGED_OUT:
+        context = launch(headless=False)
+        signed_in = wait_for_login(_first_page(context), login_polls)
+        context.close()
+        if not signed_in:
+            raise InstahyreBlocked(NOT_SIGNED_IN)
+        context = launch(headless=True)
+    else:
+        context = launch(headless=False)
+    reason, page = _session_or_close(context)
+    if reason:
+        raise InstahyreBlocked(reason)
+    return context, page
+
+
+def _launcher(playwright, profile_dir):
+    return lambda headless: playwright.chromium.launch_persistent_context(str(profile_dir), headless=headless)
+
+
 def fetch_facets(profile_dir, facets: tuple[int, ...], pause_ms: int = 2000) -> dict[int, list[dict]]:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(str(profile_dir), headless=False)
+        context, page = open_session(_launcher(playwright, profile_dir))
         try:
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(MATCHES_PAGE, wait_until="domcontentloaded")
-            page.wait_for_timeout(5000)
-            reason = blocked_reason(page.url, page.inner_text("body"))
-            if reason:
-                raise InstahyreBlocked(reason)
             results = {}
             for facet in facets:
                 rows = []
@@ -202,7 +257,10 @@ def apply_on_instahyre(profile_dir, jobs: list[dict], record, pause_seconds: flo
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(str(profile_dir), headless=False)
+        try:
+            context, _ = open_session(_launcher(playwright, profile_dir))
+        except InstahyreBlocked as blocked:
+            return str(blocked)
         try:
             return apply_jobs(context.new_page, jobs, record, time.sleep, pause_seconds, stop_file)
         finally:
