@@ -7,6 +7,7 @@
   'needs': ('Needs you', 'A required question had no truthful automatic answer. Finish these by hand.'),
   'referrals': ('Referrals', 'Warm introductions for your India target companies.'),
   'ats': ('ATS score', 'Upload a resume and see how an applicant tracking system would rate it.'),
+  'resume': ('Resume builder', 'Pick a template, start from your master resume or an ATS check, then edit the LaTeX.'),
   'questionnaires': ('Instahyre', 'Questionnaires recruiters sent you. Review the drafted answers, then submit.'),
   'applied': ('Applied', 'Every application that went out, newest first.'),
   'pipeline': ('In pipeline', 'Discovered and waiting to be scored.'),
@@ -16,7 +17,7 @@
   ('', [('today', 'home')]),
   ('Apply', [('ready', 'target'), ('instahyre', 'zap'), ('manual', 'inbox'), ('needs', 'alert')]),
   ('Network', [('referrals', 'users')]),
-  ('Tools', [('ats', 'gauge')]),
+  ('Tools', [('ats', 'gauge'), ('resume', 'pen')]),
   ('Track', [('applied', 'check'), ('pipeline', 'layers'), ('skipped', 'eye-off')]),
 ] -%}
 <!doctype html>
@@ -63,7 +64,7 @@
         <h1>{{ pages[view][0] }}</h1>
         <p>{{ pages[view][1] }}</p>
       </div>
-      {% if view not in ('today', 'referrals', 'questionnaires', 'ats') %}
+      {% if view not in ('today', 'referrals', 'questionnaires', 'ats', 'resume') %}
       <label class="search">{{ icon('search', 16) }}<input type="search" placeholder="Search company, role, city…" data-search-input aria-label="Search"><kbd>/</kbd></label>
       {% endif %}
     </header>
@@ -74,6 +75,8 @@
       {% include "_referrals.html" %}
     {% elif view == 'ats' %}
       {% include "_ats.html" %}
+    {% elif view == 'resume' %}
+      {% include "_resume.html" %}
     {% elif view == 'questionnaires' %}
       {% include "_instahyre_tabs.html" %}
       {% include "_questionnaires.html" %}

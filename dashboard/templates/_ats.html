@@ -51,7 +51,7 @@
         <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
       </div>
       <form method="post" action="/ats/{{ latest.id }}/delete" class="ats-clear">
-        <button type="submit" class="btn small" data-confirm="Remove this result?">{{ icon('x', 13) }} Clear</button>
+        <button type="submit" class="btn small" data-confirm="The score and feedback for {{ latest.filename }} will be removed from history." data-confirm-title="Remove this result?" data-confirm-ok="Remove" data-confirm-danger>{{ icon('x', 13) }} Clear</button>
       </form>
     </div>
 
@@ -83,6 +83,11 @@
     <div class="ats-section">
       <h3>Top fixes</h3>
       <ol class="ats-fixes">{% for fix in r.fixes %}<li style="--i: {{ loop.index0 }}"><span>{{ loop.index }}</span><p>{{ fix }}</p></li>{% endfor %}</ol>
+      <a class="build-cta" href="/?view=resume&check={{ latest.id }}">
+        <span class="cta-icon">{{ icon('file', 18) }}</span>
+        <span><b>Build a resume from these fixes</b><small>Claude rewrites your master resume's wording; you pick which changes to keep.</small></span>
+        <span class="cta-arrow">→</span>
+      </a>
     </div>
     {% endif %}
   </section>
@@ -104,7 +109,7 @@
 <section class="card ats-history">
   <div class="hist-head">
     <h3>History</h3>
-    <form method="post" action="/ats/clear"><button type="submit" class="btn small" data-confirm="Remove all {{ ats_checks | length }} results?">Clear all</button></form>
+    <form method="post" action="/ats/clear"><button type="submit" class="btn small" data-confirm="All {{ ats_checks | length }} results will be removed from history. This cannot be undone." data-confirm-title="Clear all results?" data-confirm-ok="Clear all" data-confirm-danger>Clear all</button></form>
   </div>
   {% for check in ats_checks %}
   <div class="hist-row">

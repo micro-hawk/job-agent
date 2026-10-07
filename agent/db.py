@@ -101,6 +101,18 @@ CREATE TABLE IF NOT EXISTS ats_checks (
     result TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS resume_drafts (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    template TEXT NOT NULL,
+    source TEXT NOT NULL,
+    tex TEXT NOT NULL DEFAULT '',
+    proposals TEXT NOT NULL DEFAULT '[]',
+    error TEXT NOT NULL DEFAULT '',
+    error_line INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS seen_emails (
     message_id TEXT PRIMARY KEY,

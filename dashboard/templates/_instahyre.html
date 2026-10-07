@@ -12,8 +12,8 @@
 </div>
 {% else %}
 <div class="actions">
-  <form method="post" action="/instahyre/apply" class="action primary" onsubmit="return confirm('Apply on Instahyre to up to 40 jobs in this tab, one by one?')" data-toast="Applying on Instahyre in the background.">
-    <button type="submit">
+  <form method="post" action="/instahyre/apply" class="action primary" data-toast="Applying on Instahyre in the background.">
+    <button type="submit" data-confirm="Instahyre will open each job in this tab and click Apply, up to 40 jobs, one by one." data-confirm-title="Apply to all in this tab?" data-confirm-ok="Start applying">
       <span class="action-icon">{{ icon('zap', 20) }}</span>
       <span><b>Apply to all in tab</b><small>Opens each job, clicks Apply now, closes the tab and moves on. Up to 40 per click.</small></span>
     </button>

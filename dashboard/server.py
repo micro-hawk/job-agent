@@ -14,10 +14,17 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, recent_checks, record_check, score_resume
+import yaml
+
+from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, get_check, recent_checks, record_check, score_resume
 from agent.config import load_settings
 from agent.db import connect, update_job
 from agent.llm import LLM, LLMError
+from agent.profile import load_profile, load_resume
+from agent.resume_builder import (
+    TEMPLATES as RESUME_TEMPLATES, CompileError, apply_changes, compile_tex, create_draft, delete_draft, get_draft, list_drafts,
+    propose_changes, render_tex, update_draft,
+)
 from agent.models import ALERT_SOURCES
 from agent.questionnaire import REASONS
 
@@ -204,8 +211,22 @@ def _daily_applied(conn: sqlite3.Connection, today: date) -> list[dict]:
     return [{"day": day.isoformat(), "label": str(day.day), "n": per_day.get(day.isoformat(), 0)} for day in days]
 
 
-def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "") -> dict:
-    view = view if view in VIEWS or view in ("referrals", "questionnaires", "ats") else "today"
+def _builder_context(conn: sqlite3.Connection, builder: dict) -> dict:
+    draft_id = str(builder.get("draft") or "")
+    draft = get_draft(conn, int(draft_id)) if draft_id.isdigit() else None
+    return {
+        "templates": RESUME_TEMPLATES,
+        "drafts": list_drafts(conn),
+        "checks": [check for check in recent_checks(conn) if check["result"].get("fixes")],
+        "check": str(builder.get("check") or ""),
+        "draft": draft,
+        "has_pdf": bool(builder.get("has_pdf")),
+        "error": builder.get("error", ""),
+    }
+
+
+def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None) -> dict:
+    view = view if view in VIEWS or view in ("referrals", "questionnaires", "ats", "resume") else "today"
     counts = {row["status"]: row["n"] for row in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     spend = conn.execute(
         "SELECT COALESCE(SUM(cost_usd), 0) AS usd, COUNT(*) AS calls FROM llm_calls WHERE substr(ts, 1, 10)=?", (today.isoformat(),)
@@ -252,6 +273,7 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
         "ats_checks": recent_checks(conn) if view == "ats" else [],
         "ats_levels": {key: value[0] for key, value in LEVELS.items()},
         "ats_error": ats_error,
+        "builder": _builder_context(conn, builder or {}) if view == "resume" else {},
         "nav_counts": nav_counts,
         "daily": daily,
         "daily_max": max([day["n"] for day in daily] + [1]),
@@ -262,8 +284,8 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
     }
 
 
-def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "") -> str:
-    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh, ats_error))
+def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None, ats_error: str = "", builder: dict | None = None) -> str:
+    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh, ats_error, builder))
 
 
 def mark_applied(conn: sqlite3.Connection, job_id: int) -> bool:
@@ -327,11 +349,54 @@ def check_resume(conn: sqlite3.Connection, fields: dict, llm, model: str, now: s
     return ""
 
 
-def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None, questionnaires_command: list[str] = QUESTIONNAIRES_COMMAND, llm_factory=None, ats_model: str = "sonnet") -> ThreadingHTTPServer:
+def start_resume(conn: sqlite3.Connection, form: dict, loader, llm_factory, model: str, now: str) -> tuple[int | None, str]:
+    template, source = form.get("template", [""])[0], form.get("source", ["master"])[0]
+    if template not in RESUME_TEMPLATES:
+        return None, "Choose a template to start from"
+    try:
+        resume, profile = loader()
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        return None, f"could not read your master resume: {exc}"
+    label = RESUME_TEMPLATES[template][0]
+    if source == "master":
+        return create_draft(conn, f"{label} · master resume", template, "master", now, tex=render_tex(template, resume, profile)), ""
+    check = get_check(conn, int(source)) if source.isdigit() else None
+    if not check or not check["result"].get("fixes"):
+        return None, "That ATS check has no fixes to apply"
+    try:
+        proposals = propose_changes(resume, check["result"]["fixes"], llm_factory(conn), model)
+    except LLMError as exc:
+        return None, f"rewriting failed: {exc}"
+    return create_draft(conn, f"{label} · fixes from {check['filename']}", template, f"ats:{check['id']}", now, proposals=proposals), ""
+
+
+def generate_resume(conn: sqlite3.Connection, draft: dict, accepted: set[str], loader, now: str) -> str:
+    proposals = [proposal | {"accepted": proposal["target"] in accepted} for proposal in draft["proposals"]]
+    resume, profile = loader()
+    update_draft(conn, draft["id"], now, proposals=proposals)
+    return render_tex(draft["template"], apply_changes(resume, [proposal for proposal in proposals if proposal["accepted"]]), profile)
+
+
+def compile_draft(conn: sqlite3.Connection, draft_id: int, tex: str, compiler, pdf_dir: Path, now: str) -> dict:
+    try:
+        pdf = compiler(tex)
+    except CompileError as exc:
+        update_draft(conn, draft_id, now, tex=tex, error=str(exc), error_line=exc.line)
+        return {"ok": False, "error": str(exc), "line": exc.line}
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    (pdf_dir / f"{draft_id}.pdf").write_bytes(pdf)
+    update_draft(conn, draft_id, now, tex=tex, error="", error_line=None)
+    return {"ok": True, "error": "", "line": None}
+
+
+def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None, questionnaires_command: list[str] = QUESTIONNAIRES_COMMAND, llm_factory=None, ats_model: str = "sonnet", resume_loader=None, compiler=compile_tex) -> ThreadingHTTPServer:
     refresher = refresher or Refresher(INSTAHYRE_COMMAND, PROJECT_ROOT)
     manual_refresher = manual_refresher or Refresher(MANUAL_REFRESH_COMMAND, PROJECT_ROOT)
     llm_factory = llm_factory or (lambda conn: LLM(conn, load_settings()["daily_budget_usd"]))
     ats_state = {"error": ""}
+    resume_state = {"error": ""}
+    resume_loader = resume_loader or (lambda: (load_resume(), load_profile()))
+    pdf_dir = Path(db_path).parent / "resumes"
     instahyre_actions = {"refresh": None, "applied": applied_command, "apply": apply_command}
 
     class Handler(BaseHTTPRequestHandler):
@@ -364,6 +429,9 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                     finally:
                         conn.close()
                 self.redirect("/?view=ats")
+                return
+            if parts[0] == "resume":
+                self.resume_post(parts)
                 return
             if parts == ["questionnaires", "fetch"]:
                 refresher.start(questionnaires_command)
@@ -413,6 +481,68 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
             self.send_header("Location", self.headers.get("Referer") or "/?view=instahyre")
             self.end_headers()
 
+        def resume_post(self, parts: list[str]) -> None:
+            length = int(self.headers.get("Content-Length") or 0)
+            form = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
+            now = datetime.now().isoformat(timespec="seconds")
+            conn = connect(db_path)
+            try:
+                if parts == ["resume", "new"]:
+                    draft_id, resume_state["error"] = start_resume(conn, form, resume_loader, llm_factory, ats_model, now)
+                    if draft_id and get_draft(conn, draft_id)["tex"]:
+                        compile_draft(conn, draft_id, get_draft(conn, draft_id)["tex"], compiler, pdf_dir, now)
+                    self.redirect(f"/?view=resume&draft={draft_id}" if draft_id else "/?view=resume")
+                    return
+                draft = get_draft(conn, int(parts[1])) if len(parts) == 3 and parts[1].isdigit() else None
+                if not draft or parts[2] not in ("generate", "save", "delete"):
+                    self.send_error(404)
+                    return
+                if parts[2] == "delete":
+                    delete_draft(conn, draft["id"])
+                    (pdf_dir / f"{draft['id']}.pdf").unlink(missing_ok=True)
+                    self.redirect("/?view=resume")
+                    return
+                if parts[2] == "generate":
+                    if not draft["tex"]:
+                        tex = generate_resume(conn, draft, set(form.get("accept", [])), resume_loader, now)
+                        compile_draft(conn, draft["id"], tex, compiler, pdf_dir, now)
+                    self.redirect(f"/?view=resume&draft={draft['id']}")
+                    return
+                result = compile_draft(conn, draft["id"], form.get("tex", [""])[0], compiler, pdf_dir, now)
+            finally:
+                conn.close()
+            if "application/json" in (self.headers.get("Accept") or ""):
+                body = json.dumps(result).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            self.redirect(f"/?view=resume&draft={draft['id']}")
+
+        def send_draft_file(self, name: str, download: bool) -> None:
+            stem, _, kind = name.partition(".")
+            conn = connect(db_path)
+            try:
+                draft = get_draft(conn, int(stem)) if stem.isdigit() and kind in ("pdf", "tex") else None
+            finally:
+                conn.close()
+            pdf = pdf_dir / f"{stem}.pdf"
+            if not draft or (kind == "pdf" and not pdf.is_file()):
+                self.send_error(404)
+                return
+            body = pdf.read_bytes() if kind == "pdf" else draft["tex"].encode("utf-8")
+            filename = "resume-" + "".join(char if char.isalnum() else "-" for char in draft["name"].lower()).strip("-")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf" if kind == "pdf" else "application/x-tex; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            disposition = "attachment" if download or kind == "tex" else "inline"
+            self.send_header("Content-Disposition", f'{disposition}; filename="{filename[:60]}.{kind}"')
+            self.end_headers()
+            self.wfile.write(body)
+
         def redirect(self, location: str) -> None:
             self.send_response(303)
             self.send_header("Location", location)
@@ -436,16 +566,25 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
             if url.path.startswith("/static/"):
                 self.send_static(unquote(url.path[len("/static/"):]))
                 return
+            query = parse_qs(url.query)
+            if url.path.startswith("/resume/"):
+                self.send_draft_file(url.path[len("/resume/"):], "download" in query)
+                return
             if url.path != "/":
                 self.send_error(404)
                 return
-            view = parse_qs(url.query).get("view", ["today"])[0]
+            view = query.get("view", ["today"])[0]
             conn = connect(db_path)
             try:
                 error = ats_state["error"] if view == "ats" else ""
                 if view == "ats":
                     ats_state["error"] = ""
-                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status(), error).encode("utf-8")
+                builder = None
+                if view == "resume":
+                    draft = query.get("draft", [""])[0]
+                    builder = {"draft": draft, "check": query.get("check", [""])[0], "error": resume_state["error"], "has_pdf": draft.isdigit() and (pdf_dir / f"{draft}.pdf").is_file()}
+                    resume_state["error"] = ""
+                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status(), error, builder).encode("utf-8")
             finally:
                 conn.close()
             self.send_response(200)

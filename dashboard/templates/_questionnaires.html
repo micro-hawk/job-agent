@@ -52,7 +52,7 @@
       {% endfor %}
       <div class="qactions">
         <button type="submit" name="action" value="save" class="btn small">Save</button>
-        <button type="submit" name="action" value="submit" class="btn small primary" data-confirm="Submit these answers to Instahyre?">{{ icon('send', 14) }} Submit</button>
+        <button type="submit" name="action" value="submit" class="btn small primary" data-confirm="Your answers will be sent to Instahyre and cannot be changed afterwards." data-confirm-title="Submit these answers?" data-confirm-ok="Submit">{{ icon('send', 14) }} Submit</button>
       </div>
     </form>
     {% endif %}

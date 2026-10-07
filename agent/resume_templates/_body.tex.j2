@@ -1,0 +1,54 @@
+<% if resume.summary %>
+\section{Summary}
+<< resume.summary >>
+
+<% endif %>
+<% if resume.experience %>
+\section{Experience}
+\resumeSubHeadingListStart
+<% for job in resume.experience %>
+  \resumeSubheading{<< job.title >>}{<< job.start|month >> -- << job.end|month >>}{<< job.company >>}{<< job.location|default('') >>}
+  <% if job.bullets %>
+  \resumeItemListStart
+  <% for bullet in job.bullets %>
+    \resumeItem{<< bullet.text >>}
+  <% endfor %>
+  \resumeItemListEnd
+  <% endif %>
+<% endfor %>
+\resumeSubHeadingListEnd
+
+<% endif %>
+<% if resume.projects %>
+\section{Projects}
+\resumeSubHeadingListStart
+<% for project in resume.projects %>
+  \resumeProjectHeading{\textbf{<< project.name >>}<% if project.stack %> $|$ \emph{<< project.stack|join(', ') >>}<% endif %>}
+  <% if project.bullets %>
+  \resumeItemListStart
+  <% for bullet in project.bullets %>
+    \resumeItem{<< bullet.text >>}
+  <% endfor %>
+  \resumeItemListEnd
+  <% endif %>
+<% endfor %>
+\resumeSubHeadingListEnd
+
+<% endif %>
+<% if resume.skills %>
+\section{Skills}
+\begin{itemize}[leftmargin=0.15in, label={}, itemsep=1pt, topsep=2pt]
+<% for group in resume.skills %>
+  \item \small\textbf{<< group['group'] >>:} << group['items']|join(', ') >>
+<% endfor %>
+\end{itemize}
+
+<% endif %>
+<% if resume.education %>
+\section{Education}
+\resumeSubHeadingListStart
+<% for school in resume.education %>
+  \resumeSubheading{<< school.institution >>}{<< school.start|default('')|month >> -- << school.end|default('')|month >>}{<< school.degree >>}{<< school.location|default('') >>}
+<% endfor %>
+\resumeSubHeadingListEnd
+<% endif %>

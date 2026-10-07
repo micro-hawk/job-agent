@@ -13,6 +13,7 @@ A local job-search autopilot. It finds backend roles on company career boards, f
 - **Instahyre**: reads the matches in a hidden browser using your saved Instahyre session (a window opens only when you need to sign in) and, on one click, opens each job, presses Apply, and moves on.
 - **Referrals**: drafts LinkedIn connection notes and follow-ups for target companies. You send them yourself.
 - **ATS score**: upload a PDF or DOCX resume, pick your experience level and optionally paste a job description to get a score, parse checks, missing keywords and the top fixes. The file is never saved.
+- **Resume builder**: pick one of three ATS-safe LaTeX templates and start from your master resume or from an ATS check's fixes. Claude proposes rewrites that reuse only what your resume already says, you tick the ones to keep, then edit the `.tex` with a live PDF preview, download it, or open it in Overleaf. Compiling needs [Tectonic](https://tectonic-typesetting.github.io) (`brew install tectonic`).
 - **Dashboard**: a local web app with an overview, job queues, search, market filters, and light and dark themes.
 
 | Ready to apply (dark) | Instahyre | Referrals |

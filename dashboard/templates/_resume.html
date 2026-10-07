@@ -1,0 +1,152 @@
+{% from "_icons.html" import icon %}
+{% set b = builder %}
+{% set draft = b.draft %}
+{% if b.error %}
+<div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not build that resume</b><p>{{ b.error }}</p></div></div>
+{% endif %}
+
+{% if not draft %}
+<form method="post" action="/resume/new" class="card rb-start" data-rb-start>
+  <div class="ats-step"><span>1</span> Choose a template</div>
+  <div class="rb-templates">
+    {% for key, (name, about) in b.templates.items() %}
+    <label class="rb-template">
+      <input type="radio" name="template" value="{{ key }}"{{ ' checked' if loop.first else '' }} required>
+      <span class="rb-thumb {{ key }}" aria-hidden="true">
+        <i class="t-name"></i><i class="t-sub"></i>
+        <i class="t-head"></i><i></i><i></i><i class="short"></i>
+        <i class="t-head"></i><i></i><i></i><i></i><i class="short"></i>
+        <i class="t-head"></i><i></i><i class="short"></i>
+      </span>
+      <span class="rb-meta"><b>{{ name }}</b><small>{{ about }}</small></span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="ats-step"><span>2</span> Start from</div>
+  <div class="rb-sources">
+    <label class="rb-source">
+      <input type="radio" name="source" value="master"{{ ' checked' if not b.check else '' }}>
+      <span class="src-icon">{{ icon('file', 18) }}</span>
+      <span><b>My master resume</b><small>Your resume exactly as written in config/master_resume.yaml.</small></span>
+    </label>
+    {% for check in b.checks %}
+    <label class="rb-source">
+      <input type="radio" name="source" data-rewrite value="{{ check.id }}"{{ ' checked' if b.check == check.id | string else '' }}>
+      <span class="src-icon score">{{ check.score }}</span>
+      <span><b>Apply fixes from {{ check.filename }}</b><small>{{ check.created_at[:16] | replace('T', ' ') }} · {{ check.result.fixes | length }} fixes</small>
+        <ul class="src-fixes">{% for fix in check.result.fixes %}<li>{{ fix }}</li>{% endfor %}</ul>
+      </span>
+    </label>
+    {% else %}
+    <p class="muted rb-hint">{{ icon('gauge', 14) }} Run an <a href="/?view=ats">ATS check</a> to also build a resume that applies its fixes.</p>
+    {% endfor %}
+  </div>
+
+  <button type="submit" class="btn primary ats-go">{{ icon('sparkle', 16) }} Build resume</button>
+  <p class="small-print">{{ icon('eye-off', 13) }} Rewrites only reword what your master resume already says. You review every change before it is used.</p>
+</form>
+
+{% if b.drafts %}
+<section class="card ats-history">
+  <div class="hist-head"><h3>Drafts</h3></div>
+  {% for item in b.drafts %}
+  <div class="hist-row rb-draft">
+    <span class="rb-badge {{ item.template }}">{{ b.templates[item.template][0][:1] }}</span>
+    <a class="hist-name" href="/?view=resume&draft={{ item.id }}">{{ item.name }}<small class="muted">{{ 'Waiting for your review' if not item.tex else ('Compile error' if item.error else 'Ready') }}</small></a>
+    <span class="muted">{{ item.updated_at[:16] | replace('T', ' ') }}</span>
+    <a class="btn small" href="/?view=resume&draft={{ item.id }}">Open</a>
+    <form method="post" action="/resume/{{ item.id }}/delete"><button type="submit" class="icon-btn" aria-label="Delete {{ item.name }}" data-confirm="“{{ item.name }}” and its PDF will be deleted." data-confirm-title="Delete this draft?" data-confirm-ok="Delete" data-confirm-danger>{{ icon('x', 14) }}</button></form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="scoring" data-progress-overlay hidden>
+  <div class="scoring-card">
+    <div class="doc"><div class="doc-head"><i></i><i></i></div><i></i><i></i><i></i><i class="short"></i><div class="doc-gap"></div><i></i><i></i><i class="short"></i><div class="beam"></div></div>
+    <h3 data-overlay-title>Building your resume</h3>
+    <ol class="steps" data-steps>
+      <li data-at="0">Reading your master resume</li>
+      <li data-at="2">Matching each fix to your bullets</li>
+      <li data-at="6">Rewriting the wording</li>
+      <li data-at="14">Dropping anything not backed by your resume</li>
+    </ol>
+    <div class="progress"><i data-progress></i></div>
+    <small class="muted" data-elapsed>Usually about 20 seconds</small>
+  </div>
+</div>
+
+{% elif not draft.tex %}
+<form method="post" action="/resume/{{ draft.id }}/generate" class="card rb-review" data-rb-review>
+  <div class="rb-review-head">
+    <div>
+      <a class="back-link" href="/?view=resume">{{ icon('back', 14) }} All drafts</a>
+      <h3>Review the suggested changes</h3>
+      <p class="muted">{{ draft.name }} · tick the changes to keep. Anything unticked stays as it is in your master resume.</p>
+    </div>
+    {% if draft.proposals %}
+    <div class="rb-pick"><button type="button" class="btn small" data-pick="all">Select all</button><button type="button" class="btn small" data-pick="none">Select none</button></div>
+    {% endif %}
+  </div>
+  {% for p in draft.proposals %}
+  <label class="rb-change" style="--i: {{ loop.index0 }}">
+    <input type="checkbox" name="accept" value="{{ p.target }}" checked>
+    <span class="rb-check" aria-hidden="true"></span>
+    <span class="rb-body">
+      <span class="rb-where">{{ p.label }}{% if p.fix %}<em>{{ p.fix }}</em>{% endif %}</span>
+      <span class="rb-before">{{ p.before }}</span>
+      <span class="rb-after">{{ p.after }}</span>
+    </span>
+  </label>
+  {% else %}
+  <div class="empty-note">{{ icon('check', 18) }} No safe rewrites were found. Suggestions that changed nothing or added numbers not in your master resume were dropped. You can still generate the resume as written.</div>
+  {% endfor %}
+  <div class="rb-review-foot">
+    <span class="muted" data-pick-count></span>
+    <button type="submit" class="btn primary">{{ icon('sparkle', 15) }} Generate .tex</button>
+  </div>
+</form>
+
+{% else %}
+<div class="rb-editor" data-rb-editor data-draft="{{ draft.id }}">
+  <div class="rb-bar card">
+    <a class="icon-btn" href="/?view=resume" title="All drafts" aria-label="All drafts">{{ icon('back', 16) }}</a>
+    <div class="rb-title"><b>{{ draft.name }}</b><small class="muted">{{ b.templates[draft.template][0] }} template · saved {{ draft.updated_at[11:16] }}</small></div>
+    <span class="rb-status {{ 'bad' if draft.error else 'ok' }}" data-status>{{ 'Compile error' if draft.error else 'Compiled' }}</span>
+    <div class="rb-actions">
+      <button type="button" class="btn primary small" data-recompile title="Recompile (⌘S)">{{ icon('play', 13) }} Recompile <kbd>⌘S</kbd></button>
+      <a class="btn small" href="/resume/{{ draft.id }}.tex?download=1" data-download-tex>{{ icon('download', 13) }} .tex</a>
+      <a class="btn small" href="/resume/{{ draft.id }}.pdf?download=1" data-download-pdf{{ ' hidden' if not b.has_pdf else '' }}>{{ icon('download', 13) }} PDF</a>
+      <form method="post" action="https://www.overleaf.com/docs" target="_blank" rel="noopener" data-overleaf>
+        <input type="hidden" name="snip" value="">
+        <input type="hidden" name="engine" value="xelatex">
+        <input type="hidden" name="snip_name" value="resume.tex">
+        <button type="submit" class="btn small">{{ icon('external', 13) }} Open in Overleaf</button>
+      </form>
+    </div>
+  </div>
+  <div class="rb-panes">
+    <form method="post" action="/resume/{{ draft.id }}/save" class="rb-source-pane card" data-tex-form>
+      <div class="pane-head"><span>main.tex</span><small class="muted" data-dirty></small></div>
+      <div class="rb-error" data-error{{ ' hidden' if not draft.error else '' }}>
+        <b>{{ icon('alert', 14) }} LaTeX error<span data-error-line>{{ ' on line %d' % draft.error_line if draft.error_line else '' }}</span></b>
+        <pre data-error-text>{{ draft.error }}</pre>
+      </div>
+      <textarea name="tex" spellcheck="false" data-tex>{{ draft.tex }}</textarea>
+      <noscript><button type="submit" class="btn primary small">Save and compile</button></noscript>
+    </form>
+    <div class="rb-preview card">
+      <div class="pane-head"><span>Preview</span><small class="muted" data-compiled-at></small></div>
+      <div class="rb-frame">
+        <iframe title="Resume preview" data-pdf{{ ' hidden' if not b.has_pdf else '' }} src="{{ ('/resume/%d.pdf#toolbar=0&view=FitH' % draft.id) if b.has_pdf else 'about:blank' }}"></iframe>
+        <div class="rb-empty" data-pdf-empty{{ ' hidden' if b.has_pdf else '' }}>{{ icon('file', 28) }}<p>Fix the error and recompile to see the PDF.</p></div>
+        <div class="rb-compiling" data-compiling hidden><span class="spinner"></span> Compiling…</div>
+      </div>
+    </div>
+  </div>
+</div>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/stex/stex.min.js"></script>
+{% endif %}

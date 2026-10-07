@@ -154,6 +154,11 @@ def clear_checks(conn: sqlite3.Connection) -> int:
     return deleted
 
 
+def get_check(conn: sqlite3.Connection, check_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM ats_checks WHERE id = ?", (check_id,)).fetchone()
+    return dict(row) | {"result": json.loads(row["result"])} if row else None
+
+
 def recent_checks(conn: sqlite3.Connection, limit: int = HISTORY) -> list[dict]:
     return [
         dict(row) | {"result": json.loads(row["result"]), "level_label": LEVELS.get(row["level"], (row["level"],))[0]}
