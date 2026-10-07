@@ -137,6 +137,12 @@ def test_low_ratings_on_the_100_scale_are_kept_when_one_is_above_10():
     assert score_resume(RESUME, 1, "mid", "", llm, "sonnet")["ratings"] == {"impact": 8, "seniority": 40, "clarity": 9}
 
 
+def test_keywords_match_across_line_breaks():
+    llm = StubLLM({"ats": rubric(["System Design"])})
+    result = score_resume(RESUME + "\nSkills: Microservices, System\nDesign", 1, "mid", "", llm, "sonnet")
+    assert result["matched_keywords"] == ["System Design"]
+
+
 def test_score_resume_rejects_resumes_without_text():
     with pytest.raises(AtsInputError, match="no readable text"):
         score_resume("   ", 1, "mid", "", StubLLM({}), "sonnet")

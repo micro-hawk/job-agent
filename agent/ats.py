@@ -103,6 +103,10 @@ def blend(parse: int, content: int, keyword: int | None = None) -> int:
     return round(0.25 * parse + 0.35 * keyword + 0.4 * content)
 
 
+def _phrase(keyword: str) -> str:
+    return r"\s+".join(re.escape(word) for word in keyword.split())
+
+
 def _clamp(value) -> int:
     return max(0, min(100, int(value or 0)))
 
@@ -116,7 +120,7 @@ def score_resume(text: str, pages: int, level: str, jd: str, llm, model: str) ->
     prompt = f"Experience level: {LEVELS[level][0]}\n\n{target}\n\nResume:\n{text}"
     rated = llm.call("ats", model, SYSTEM, prompt, SCHEMA)
     keywords = list(dict.fromkeys(keyword.strip() for keyword in rated.get("keywords", []) if keyword.strip()))
-    matched = [keyword for keyword in keywords if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text, re.I)]
+    matched = [keyword for keyword in keywords if re.search(rf"(?<!\w){_phrase(keyword)}(?!\w)", text, re.I)]
     keyword_pct = round(100 * len(matched) / len(keywords)) if keywords else 100
     ratings = [_clamp(rated.get(key)) for key in ("impact", "seniority", "clarity")]
     if max(ratings) <= 10:
