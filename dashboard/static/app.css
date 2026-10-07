@@ -545,6 +545,11 @@ a.hist-name:hover { color: var(--accent); }
 .modal-icon::before { content: "?"; font-weight: 800; font-size: 19px; }
 .is-danger .modal-icon { background: var(--bad-soft); color: var(--bad); }
 .is-danger .modal-icon::before { content: "!"; }
+.scorer-modal { width: min(460px, 100%); }
+.scorer-options { display: grid; gap: 10px; margin: 14px 0 4px; }
+.scorer-option { display: grid; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; font: inherit; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.scorer-option:hover, .scorer-option:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+.scorer-option small { color: var(--muted); line-height: 1.4; }
 .modal h3 { margin: 0 0 6px; font-size: 16.5px; letter-spacing: -0.01em; }
 .modal p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }

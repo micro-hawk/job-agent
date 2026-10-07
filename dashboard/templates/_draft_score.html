@@ -1,5 +1,5 @@
 {% from "_icons.html" import icon %}
-{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list %}
+{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list, scorer %}
 <div class="ats-head rb-ats-head">
   {{ ring(r) }}
   <div class="ats-summary">
@@ -10,6 +10,7 @@
     <div class="muted">vs. the original check of {{ baseline.filename }}</div>
     {% endif %}
     <div class="muted">{{ level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
+    <div class="muted">{{ scorer(r) }}</div>
     <div class="muted">{{ icon('eye-off', 13) }} Not saved anywhere</div>
   </div>
 </div>

@@ -6,7 +6,7 @@ import pytest
 
 from agent.ats import (
     LEVELS, SCHEMA, SYSTEM, AtsInputError, blend, clear_checks, delete_check, extract_text, find_check, fingerprint, parse_checks, record_check, recent_checks,
-    score_resume,
+    score_local, score_resume,
 )
 
 from tests.fakes import NOW, StubLLM
@@ -26,7 +26,10 @@ Java, Spring Boot, Kafka, Redis, PostgreSQL, Docker
 
 EDUCATION
 B.Tech Computer Science, 2021
-""" + "\n".join(f"- Worked on backend service number {index} with the platform team every sprint" for index in range(12))
+""" + "\n".join(
+    f"- {verb} backend service number {index} with the platform team, adding tests, metrics, dashboards and alerts so each weekly release stays safe and observable across all three production regions"
+    for index, verb in enumerate(["Designed", "Automated", "Reduced", "Shipped", "Profiled", "Hardened", "Documented", "Upgraded", "Monitored", "Refactored", "Tuned", "Streamlined"])
+)
 
 
 def make_pdf(pages: list[list[str]]) -> bytes:
@@ -84,7 +87,7 @@ def checks_by_name(text, level, pages=1):
 def test_parse_checks_pass_for_a_well_formed_resume():
     checks = checks_by_name(RESUME, "mid")
     assert all(check["ok"] for check in checks.values()), [check for check in checks.values() if not check["ok"]]
-    assert set(checks) == {"text", "sections", "contact", "length", "numbers", "dates"}
+    assert set(checks) == {"text", "words", "sections", "contact", "length", "numbers", "dates", "bullets", "pronouns", "verbs"}
 
 
 def test_parse_checks_flag_what_an_ats_would_miss():
@@ -195,3 +198,60 @@ def test_old_databases_gain_the_fingerprint_column(tmp_path):
     db = tmp_path / "old.db"
     sqlite3.connect(db).executescript("CREATE TABLE ats_checks (id INTEGER PRIMARY KEY, filename TEXT NOT NULL, level TEXT NOT NULL, score INTEGER NOT NULL, result TEXT NOT NULL, created_at TEXT NOT NULL);")
     assert "fingerprint" in {row["name"] for row in connect(db).execute("PRAGMA table_info(ats_checks)")}
+
+
+def test_word_count_outside_400_to_700_is_flagged():
+    assert 400 <= len(RESUME.split()) <= 700
+    short = checks_by_name(RESUME.split("EDUCATION")[0], "mid")["words"]
+    long = checks_by_name(RESUME + "\n" + "Extra context words here. " * 80, "mid")["words"]
+    assert not short["ok"] and "aim for 400–700" in short["detail"]
+    assert not long["ok"] and f"{len(RESUME.split()) + 320} words" in long["detail"]
+
+
+def test_bullet_count_outside_12_to_20_is_flagged():
+    assert checks_by_name(RESUME, "mid")["bullets"]["detail"] == "16 bullet points (aim for 12–20)"
+    few = RESUME.split("EDUCATION")[0] + "EDUCATION\nB.Tech 2021"
+    many = RESUME + "\n" + "\n".join(f"• Extra{index} work item {index}" for index in range(5))
+    assert not checks_by_name(few, "mid")["bullets"]["ok"] and not checks_by_name(many, "mid")["bullets"]["ok"]
+
+
+def test_personal_pronouns_are_flagged_but_role_numerals_are_not():
+    assert checks_by_name(RESUME + "\nSoftware Development Engineer I\nBengaluru, US", "mid")["pronouns"]["ok"]
+    flagged = checks_by_name(RESUME + "\nI built the tooling my team and we used", "mid")["pronouns"]
+    assert not flagged["ok"] and flagged["detail"] == "remove personal pronouns: I, my, we"
+
+
+def test_bullets_that_open_with_the_same_verb_are_flagged():
+    assert checks_by_name(RESUME, "mid")["verbs"]["ok"]
+    repeated = checks_by_name(RESUME + "\n● Built a cache 2x faster\n▪ cut costs by 10%\n• Built again", "mid")["verbs"]
+    assert not repeated["ok"] and repeated["detail"] == "bullets repeat opening verbs: Built ×3, Cut ×2"
+
+
+def test_keywords_match_other_forms_of_the_same_word():
+    llm = StubLLM({"ats": rubric(["Mentoring", "microservice", "Optimization", "Scala", "Scaling"])})
+    text = RESUME + "\nOptimized queries for Microservices, scaled out"
+    result = score_resume(text, 1, "mid", "jd", llm, "sonnet")
+    assert result["matched_keywords"] == ["Mentoring", "microservice", "Optimization", "Scaling"] and result["missing_keywords"] == ["Scala"]
+
+
+def test_local_scoring_matches_known_terms_from_the_jd_without_an_llm():
+    result = score_local(RESUME, 1, "mid", "We want Kafka, Kubernetes and Golang experience, plus REST APIs. The rest is a bonus.")
+    assert result["mode"] == "local" and result["with_jd"]
+    assert result["matched_keywords"] == ["Kafka"] and result["missing_keywords"] == ["Kubernetes", "Golang", "REST APIs"]
+    assert result["keyword_score"] == 25 and result["parse_score"] == 100 and result["score"] == round((100 + 25) / 2)
+    assert result["ratings"] is None and result["content_score"] is None and result["fixes"] == []
+
+
+def test_local_scoring_without_a_jd_uses_typical_backend_keywords():
+    result = score_local(RESUME, 1, "mid", "")
+    assert not result["with_jd"] and {"Kafka", "Redis", "Docker"} <= set(result["matched_keywords"])
+    assert "Kubernetes" in result["missing_keywords"] and result["keyword_score"] is not None
+
+
+def test_local_scoring_rejects_resumes_without_text():
+    with pytest.raises(AtsInputError):
+        score_local("  ", 1, "mid", "")
+
+
+def test_fingerprint_keeps_llm_results_and_separates_local_ones():
+    assert fingerprint(b"cv", "mid", "jd", "llm") == fingerprint(b"cv", "mid", "jd") != fingerprint(b"cv", "mid", "jd", "local")

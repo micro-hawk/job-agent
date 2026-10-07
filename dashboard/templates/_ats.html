@@ -1,6 +1,6 @@
 {% from "_icons.html" import icon %}
 {% set latest = ats_latest %}
-{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list %}
+{% from "_ats_parts.html" import band, verdict, ring, breakdown, fix_list, scorer %}
 {% if ats_error %}
 <div class="banner bad">{{ icon('alert', 18) }}<div><b>Could not score that resume</b><p>{{ ats_error }}</p></div></div>
 {% endif %}
@@ -30,8 +30,9 @@
     <textarea name="jd" rows="5" class="jd" placeholder="Paste a job description to check which of its keywords your resume is missing"></textarea>
 
     <input type="hidden" name="rescore" value="" data-rescore-input>
+    <input type="hidden" name="mode" value="llm" data-mode-input>
     <button type="submit" class="btn primary ats-go" data-ats-submit>{{ icon('gauge', 16) }} <span data-submit-label>Check score</span></button>
-    <p class="rescore-hint" data-rescore-hint hidden>{{ icon('sparkle', 13) }} Choose the same file to get a fresh score from Claude.{% if latest and latest.result.with_jd %} Paste the job description again to score against it.{% endif %}</p>
+    <p class="rescore-hint" data-rescore-hint hidden>{{ icon('sparkle', 13) }} Choose the same file to get a fresh score.{% if latest and latest.result.with_jd %} Paste the job description again to score against it.{% endif %}</p>
     <p class="small-print">{{ icon('eye-off', 13) }} Read in memory and never saved. Only the score, feedback and a fingerprint of the file are kept, so the same resume is not scored twice.</p>
   </form>
 
@@ -44,10 +45,10 @@
         <span class="verdict {{ band(r.score) }}">{{ verdict(r.score) }}</span>
         <b class="ats-file">{{ icon('file', 15) }} {{ latest.filename }}</b>
         <div class="muted">{{ latest.level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
-        <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
+        <div class="muted">{{ scorer(r) }} · {{ latest.created_at[:16] | replace('T', ' ') }}</div>
       </div>
       <div class="ats-actions">
-      <button type="button" class="btn small" data-rescore title="Upload the file again and get a fresh score from Claude">{{ icon('sparkle', 13) }} Score again</button>
+      <button type="button" class="btn small" data-rescore title="Upload the file again and get a fresh score">{{ icon('sparkle', 13) }} Score again</button>
       <form method="post" action="/ats/{{ latest.id }}/delete" class="ats-clear">
         <button type="submit" class="btn small" data-confirm="The score and feedback for {{ latest.filename }} will be removed from history." data-confirm-title="Remove this result?" data-confirm-ok="Remove" data-confirm-danger>{{ icon('x', 13) }} Clear</button>
       </form>

@@ -257,3 +257,18 @@ def test_apply_fix_says_when_it_needs_new_facts_or_fails(tmp_path):
     finally:
         stop(server)
     assert failed == {"ok": False, "error": "rewriting failed: budget reached"}
+
+
+def test_draft_can_be_scored_by_the_local_parser_without_the_llm(tmp_path):
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    draft_id = create_draft(conn, "Draft", "classic", "master", NOW, tex="x")
+    llm = ats_llm()
+    server, base = serve(db, llm=llm, compiler=pdf_compiler())
+    try:
+        httpx.post(f"{base}/resume/{draft_id}/save", data={"tex": "x"}, headers={"Accept": "application/json"})
+        result = httpx.post(f"{base}/resume/{draft_id}/ats", data={"level": "mid", "jd": "Kafka and Golang", "mode": "local"}).json()
+    finally:
+        stop(server)
+    assert result["ok"] and llm.calls == [] and "Local ATS parser" in result["html"]
+    assert "Golang" in result["html"] and "Impact" not in result["html"] and "data-apply-fix" not in result["html"]

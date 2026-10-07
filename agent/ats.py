@@ -20,6 +20,8 @@ LEVELS = {
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 WORDS_PER_PAGE = 500
 MIN_WORDS = 150
+WORD_RANGE = (400, 700)
+BULLET_RANGE = (12, 20)
 NUMBERS_SHARE = 0.3
 HISTORY = 20
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -31,6 +33,22 @@ SECTIONS = {
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
 YEAR = re.compile(r"\b(19|20)\d{2}\b")
+BULLET = re.compile(r"^\s*(?:[•●▪◦‣∙]\s*|[-*–]\s+)([A-Za-z][\w'-]*)", re.M)
+PRONOUN = re.compile(r"\bI\b(?=\s+[a-z])|\b(?:[Mm]y|[Mm]e|[Mm]yself|[Mm]ine|[Ww]e|[Oo]ur|[Oo]urs|us)\b")
+SUFFIXES = ("ations", "ation", "ings", "ing", "ers", "ed", "es", "er", "s", "e")
+TERMS = (
+    "Java", "Python", "Golang", "Kotlin", "Scala", "TypeScript", "JavaScript", "C++", "C#", "Rust", "Ruby", "SQL", "Node.js",
+    "Spring Boot", "Django", "Flask", "FastAPI", "React", "Hibernate", "JPA", "gRPC", "GraphQL", "REST APIs", "Microservices",
+    "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Cassandra", "DynamoDB", "Kafka", "RabbitMQ", "Spark",
+    "Airflow", "Snowflake", "Data Pipelines", "ETL", "AWS", "GCP", "Azure", "Docker", "Kubernetes", "Terraform", "Jenkins",
+    "CI/CD", "Linux", "Git", "System Design", "Distributed Systems", "Event-Driven", "High Availability", "Scalability",
+    "Concurrency", "Multithreading", "Caching", "Observability", "Prometheus", "Grafana", "Unit Testing", "JUnit", "OAuth",
+    "Security", "Agile", "Scrum", "Mentoring", "Code Review", "On-call", "Machine Learning", "LLM", "Payments",
+)
+BACKEND_KEYWORDS = (
+    "Java", "Python", "Spring Boot", "Microservices", "REST APIs", "SQL", "PostgreSQL", "Redis", "Kafka", "Docker",
+    "Kubernetes", "AWS", "CI/CD", "System Design", "Distributed Systems", "Unit Testing", "Git", "Agile",
+)
 SYSTEM = (
     "You are an applicant tracking system reviewer. Rate the resume below for the given experience level, judging only "
     "what the resume actually says. Give impact, seniority and clarity each as an integer from 0 to 100. impact: how well achievements show measurable results. seniority: how well the scope, "
@@ -87,13 +105,20 @@ def parse_checks(text: str, level: str, pages: int) -> list[dict]:
     long_lines = [line for line in text.splitlines() if len(line.split()) >= 6]
     numbered = sum(1 for line in long_lines if re.search(r"\d", line))
     max_pages = LEVELS[level][1]
+    openers = [verb.capitalize() for verb in BULLET.findall(text)]
+    repeated = sorted((verb for verb in dict.fromkeys(openers) if openers.count(verb) > 1), key=lambda verb: -openers.count(verb))
+    pronouns = list(dict.fromkeys(match.lower() if match != "I" else match for match in PRONOUN.findall(text)))
     return [
         _check("text", words >= MIN_WORDS, f"{words} words of selectable text" + ("" if words >= MIN_WORDS else ": scanned or image PDFs cannot be read by an ATS")),
+        _check("words", WORD_RANGE[0] <= words <= WORD_RANGE[1], f"{words} words (aim for {WORD_RANGE[0]}–{WORD_RANGE[1]})"),
         _check("sections", not missing, "Experience, Skills and Education headings found" if not missing else f"missing headings: {', '.join(missing)}"),
         _check("contact", bool(EMAIL.search(text) and PHONE.search(text)), "email and phone found" if EMAIL.search(text) and PHONE.search(text) else "add an email and phone number as plain text"),
         _check("length", pages <= max_pages, f"{pages} page{'' if pages == 1 else 's'} (aim for at most {max_pages} at this level)"),
         _check("numbers", bool(long_lines) and numbered / len(long_lines) >= NUMBERS_SHARE, f"{numbered} of {len(long_lines)} lines include a number or metric"),
         _check("dates", bool(YEAR.search(text)), "dates found" if YEAR.search(text) else "add start and end dates to each role"),
+        _check("bullets", BULLET_RANGE[0] <= len(openers) <= BULLET_RANGE[1], f"{len(openers)} bullet points (aim for {BULLET_RANGE[0]}–{BULLET_RANGE[1]})"),
+        _check("pronouns", not pronouns, "no personal pronouns" if not pronouns else f"remove personal pronouns: {', '.join(pronouns)}"),
+        _check("verbs", not repeated, "every bullet opens with a different verb" if not repeated else "bullets repeat opening verbs: " + ", ".join(f"{verb} ×{openers.count(verb)}" for verb in repeated)),
     ]
 
 
@@ -103,8 +128,21 @@ def blend(parse: int, content: int, keyword: int | None = None) -> int:
     return round(0.25 * parse + 0.35 * keyword + 0.4 * content)
 
 
+def _word(word: str) -> str:
+    if word.isupper():
+        return f"(?-i:{re.escape(word)})"
+    if not (word.isalpha() and len(word) >= 5):
+        return re.escape(word)
+    suffix = next((suffix for suffix in SUFFIXES if word.lower().endswith(suffix) and len(word) - len(suffix) >= 4), "")
+    return re.escape(word[: len(word) - len(suffix)]) + "(?:" + "|".join(SUFFIXES) + ")?"
+
+
 def _phrase(keyword: str) -> str:
-    return r"\s+".join(re.escape(word) for word in keyword.split())
+    return r"\s+".join(_word(word) for word in keyword.split())
+
+
+def _found(keyword: str, text: str) -> bool:
+    return bool(re.search(rf"(?<!\w){_phrase(keyword)}(?!\w)", text, re.I))
 
 
 def _clamp(value) -> int:
@@ -120,7 +158,7 @@ def score_resume(text: str, pages: int, level: str, jd: str, llm, model: str) ->
     prompt = f"Experience level: {LEVELS[level][0]}\n\n{target}\n\nResume:\n{text}"
     rated = llm.call("ats", model, SYSTEM, prompt, SCHEMA)
     keywords = list(dict.fromkeys(keyword.strip() for keyword in rated.get("keywords", []) if keyword.strip()))
-    matched = [keyword for keyword in keywords if re.search(rf"(?<!\w){_phrase(keyword)}(?!\w)", text, re.I)]
+    matched = [keyword for keyword in keywords if _found(keyword, text)]
     keyword_pct = round(100 * len(matched) / len(keywords)) if keywords else 100
     ratings = [_clamp(rated.get(key)) for key in ("impact", "seniority", "clarity")]
     if max(ratings) <= 10:
@@ -138,12 +176,43 @@ def score_resume(text: str, pages: int, level: str, jd: str, llm, model: str) ->
         "missing_keywords": [keyword for keyword in keywords if keyword not in matched],
         "fixes": [fix.strip() for fix in rated.get("fixes", []) if fix.strip()][:5],
         "with_jd": bool(jd.strip()),
+        "mode": "llm",
     }
 
 
-def fingerprint(data: bytes, level: str, jd: str) -> str:
+def _terms_in(jd: str) -> list[str]:
+    found = [(re.search(rf"(?<!\w){_phrase(term)}(?!\w)", jd, re.I), term) for term in TERMS]
+    return [term for match, term in sorted((pair for pair in found if pair[0]), key=lambda pair: pair[0].start())]
+
+
+def score_local(text: str, pages: int, level: str, jd: str) -> dict:
+    if not text.strip():
+        raise AtsInputError("the resume has no readable text; an ATS would see it as blank")
+    checks = parse_checks(text, level, pages)
+    parse = round(100 * sum(check["ok"] for check in checks) / len(checks))
+    keywords = _terms_in(jd) if jd.strip() else list(BACKEND_KEYWORDS)
+    matched = [keyword for keyword in keywords if _found(keyword, text)]
+    keyword_pct = round(100 * len(matched) / len(keywords)) if keywords else 100
+    return {
+        "score": round((parse + keyword_pct) / 2),
+        "parse_score": parse,
+        "content_score": None,
+        "keyword_score": keyword_pct,
+        "ratings": None,
+        "checks": checks,
+        "matched_keywords": matched,
+        "missing_keywords": [keyword for keyword in keywords if keyword not in matched],
+        "fixes": [],
+        "with_jd": bool(jd.strip()),
+        "mode": "local",
+    }
+
+
+def fingerprint(data: bytes, level: str, jd: str, mode: str = "llm") -> str:
     digest = hashlib.sha256(data)
     digest.update(b"\0" + level.encode("utf-8") + b"\0" + " ".join(jd.split()).encode("utf-8"))
+    if mode != "llm":
+        digest.update(b"\0" + mode.encode("utf-8"))
     return digest.hexdigest()
 
 

@@ -18,7 +18,7 @@ import yaml
 
 from agent.ats import (
     LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, find_check, fingerprint, get_check, recent_checks, record_check,
-    score_resume,
+    score_local, score_resume,
 )
 from agent.config import load_settings
 from agent.db import connect, update_job
@@ -359,13 +359,14 @@ def check_resume(conn: sqlite3.Connection, fields: dict, llm, model: str, now: s
         return None, False, "choose a resume file to upload"
     if len(data) > MAX_UPLOAD_BYTES:
         return None, False, "that file is larger than 5 MB"
-    key = fingerprint(data, level, jd)
+    mode = "local" if _field(fields, "mode") == "local" else "llm"
+    key = fingerprint(data, level, jd, mode)
     saved = None if _field(fields, "rescore") == "1" else find_check(conn, key)
     if saved:
         return saved, True, ""
     try:
         text, pages = extract_text(filename, data)
-        result = score_resume(text, pages, level, jd, llm, model)
+        result = score_local(text, pages, level, jd) if mode == "local" else score_resume(text, pages, level, jd, llm, model)
     except AtsInputError as exc:
         return None, False, str(exc)
     except LLMError as exc:
@@ -409,7 +410,7 @@ def score_draft(conn: sqlite3.Connection, draft: dict, form: dict, pdf: Path, ll
         return {"ok": False, "error": "Choose an experience level"}
     try:
         text, pages = extract_text("resume.pdf", pdf.read_bytes())
-        result = score_resume(text, pages, level, jd, llm, model)
+        result = score_local(text, pages, level, jd) if form.get("mode", [""])[0] == "local" else score_resume(text, pages, level, jd, llm, model)
     except AtsInputError as exc:
         return {"ok": False, "error": str(exc)}
     except LLMError as exc:

@@ -518,6 +518,25 @@ def test_ats_upload_scores_and_stores_the_result(tmp_path):
     assert "Kafka and Golang" in llm.calls[0][2] and "Lead with impact" in page
 
 
+def test_ats_upload_can_score_with_the_local_parser_without_the_llm(tmp_path):
+    from tests.fakes import StubLLM
+    from tests.test_ats import RESUME, make_docx
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    llm = StubLLM({})
+    server, base = serve_ats(db, llm)
+    try:
+        form = httpx.get(f"{base}/?view=ats").text
+        httpx.post(f"{base}/ats/check", data={"level": "senior", "jd": "Kafka and Golang", "mode": "local"}, files={"resume": ("cv.docx", make_docx(RESUME.splitlines()))})
+        page = httpx.get(f"{base}/?view=ats").text
+    finally:
+        server.shutdown()
+        server.server_close()
+    result = json.loads(conn.execute("SELECT result FROM ats_checks").fetchone()["result"])
+    assert llm.calls == [] and result["mode"] == "local" and result["missing_keywords"] == ["Golang"]
+    assert 'name="mode"' in form and "Local ATS parser" in page and "Impact" not in page
+
+
 def test_ats_upload_rejects_bad_input_without_storing(tmp_path):
     from agent.ats import MAX_UPLOAD_BYTES
     from agent.llm import LLMError

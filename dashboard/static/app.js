@@ -105,7 +105,7 @@
     const again = document.querySelector("[data-rescore]");
     if (again) again.addEventListener("click", () => {
       rescore.value = "1";
-      label.textContent = "Score again with Claude";
+      label.textContent = "Score again";
       form.classList.add("rescoring");
       form.querySelector("[data-rescore-hint]").hidden = false;
       form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -132,7 +132,7 @@
         return;
       }
       clearTimeout(pending);
-      if (reply.saved && data.get("rescore") !== "1") {
+      if (reply.saved && data.get("rescore") !== "1" && data.get("mode") !== "local") {
         overlay.hidden = true;
         button.disabled = false;
         const when = String(reply.created_at || "").slice(0, 16).replace("T", " ");
@@ -159,7 +159,11 @@
         error.textContent = problem;
         return;
       }
-      score(new FormData(form));
+      chooseScorer().then(mode => {
+        if (!mode) return;
+        form.querySelector("[data-mode-input]").value = mode;
+        score(new FormData(form));
+      });
     });
   }
 
@@ -188,6 +192,58 @@
         button.disabled = false;
       }
     }, { once: true });
+  }
+
+  function chooseScorer() {
+    let modal = document.querySelector("[data-scorer-modal]");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.className = "modal-backdrop";
+      modal.dataset.scorerModal = "";
+      modal.hidden = true;
+      modal.innerHTML = '<div class="modal scorer-modal" role="dialog" aria-modal="true" aria-labelledby="scorer-title">' +
+        '<div class="modal-icon" aria-hidden="true"></div><h3 id="scorer-title">How should this resume be scored?</h3>' +
+        '<div class="scorer-options">' +
+        '<button type="button" class="scorer-option" data-scorer="llm"><b>Claude (LLM)</b><small>Parse checks and keywords, plus impact, seniority and clarity ratings and top fixes. Uses tokens, about 15 seconds.</small></button>' +
+        '<button type="button" class="scorer-option" data-scorer="local"><b>Local ATS parser</b><small>Parse checks, word and bullet counts, pronouns, repeated verbs and keyword match only. Instant and free.</small></button>' +
+        '</div><div class="modal-actions"><button type="button" class="btn" data-scorer-cancel>Cancel</button></div></div>';
+      document.body.appendChild(modal);
+    }
+    const options = Array.from(modal.querySelectorAll("[data-scorer]"));
+    let last = "llm";
+    try { last = localStorage.getItem("ats-scorer") || "llm"; } catch (ignored) {}
+    const opener = document.activeElement;
+    modal.hidden = false;
+    requestAnimationFrame(() => modal.classList.add("open"));
+    (options.find(option => option.dataset.scorer === last) || options[0]).focus();
+
+    return new Promise(resolve => {
+      function close(answer) {
+        modal.classList.remove("open");
+        modal.hidden = true;
+        document.removeEventListener("keydown", onKey, true);
+        modal.removeEventListener("click", onClick);
+        if (opener && opener.focus) opener.focus();
+        if (answer) try { localStorage.setItem("ats-scorer", answer); } catch (ignored) {}
+        resolve(answer);
+      }
+      function onKey(event) {
+        if (event.key === "Escape") { event.preventDefault(); close(null); }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          const focusable = Array.from(modal.querySelectorAll("button"));
+          const index = focusable.indexOf(document.activeElement);
+          focusable[(index + (event.shiftKey ? focusable.length - 1 : 1)) % focusable.length].focus();
+        }
+      }
+      function onClick(event) {
+        const option = event.target.closest("[data-scorer]");
+        if (option) close(option.dataset.scorer);
+        else if (event.target === modal || event.target.closest("[data-scorer-cancel]")) close(null);
+      }
+      document.addEventListener("keydown", onKey, true);
+      modal.addEventListener("click", onClick);
+    });
   }
 
   function confirmDialog(options) {
@@ -528,6 +584,9 @@
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
+      const mode = await chooseScorer();
+      if (!mode) return;
+      form.querySelector("[data-mode-input]").value = mode;
       error.hidden = true;
       run.disabled = true;
       busy.hidden = false;
@@ -543,7 +602,7 @@
         }
         const started = Date.now();
         (function tick() {
-          busyText.textContent = "Scoring your draft… " + Math.floor((Date.now() - started) / 1000) + "s · usually about 15 seconds";
+          busyText.textContent = "Scoring your draft… " + Math.floor((Date.now() - started) / 1000) + "s" + (mode === "local" ? "" : " · usually about 15 seconds");
           timer = setTimeout(tick, 500);
         })();
         const response = await fetch(form.action, { method: "POST", body: new URLSearchParams(new FormData(form)), headers: { Accept: "application/json" } });

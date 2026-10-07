@@ -141,6 +141,7 @@
         {% endfor %}
       </div>
       <textarea name="jd" rows="2" class="jd" placeholder="Optional: paste the job description to check its keywords"></textarea>
+      <input type="hidden" name="mode" value="llm" data-mode-input>
       <div class="rb-ats-go">
         <button type="submit" class="btn primary small" data-ats-run>{{ icon('sparkle', 13) }} Check score</button>
         {% if b.source_check %}<small class="muted">Compared with the original check of {{ b.source_check.filename }} ({{ b.source_check.score }})</small>{% endif %}
