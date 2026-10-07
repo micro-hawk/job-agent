@@ -28,7 +28,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <script src="/static/app.js"></script>
-{% if refresh.running and view == 'instahyre' %}<meta http-equiv="refresh" content="10">{% endif %}
+{% if (refresh.running and view == 'instahyre') or (manual_refresh.running and view == 'manual') %}<meta http-equiv="refresh" content="10">{% endif %}
 </head>
 <body>
 <div class="app">
@@ -71,6 +71,7 @@
       {% include "_referrals.html" %}
     {% else %}
       {% if view == 'instahyre' %}{% include "_instahyre.html" %}{% endif %}
+      {% if view == 'manual' %}{% include "_manual.html" %}{% endif %}
       {% include "_jobs.html" %}
     {% endif %}
   </main>

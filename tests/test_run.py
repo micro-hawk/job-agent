@@ -51,3 +51,24 @@ def test_pipeline_skip_flags(conn):
     assert errors == []
     assert "score" not in stats and "alerts" not in stats
     assert llm.calls == []
+
+
+def test_manual_refresh_reads_confirmations_and_prints_the_result(conn, capsys):
+    from datetime import date
+    from agent.run import manual_refresh_command
+    seen = {}
+
+    def fetch(user, password, since):
+        seen.update(user=user, since=since)
+        return []
+
+    assert manual_refresh_command(conn, SETTINGS, "secret", date(2026, 10, 5), fetch) == 0
+    assert seen == {"user": SETTINGS["gmail"]["user"], "since": date(2026, 9, 14)}
+    assert json.loads(capsys.readouterr().out) == {"linkedin_applied": 0, "naukri_applied": 0, "expired": 0}
+
+
+def test_manual_refresh_without_gmail_password_says_so(conn, capsys):
+    from datetime import date
+    from agent.run import manual_refresh_command
+    assert manual_refresh_command(conn, SETTINGS, "", date(2026, 10, 5), lambda *a: []) == 1
+    assert "GMAIL_APP_PASSWORD" in capsys.readouterr().out

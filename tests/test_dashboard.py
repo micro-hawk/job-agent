@@ -330,3 +330,35 @@ def test_stop_endpoint_stops_the_refresher(tmp_path):
         server.server_close()
     refresher.wait()
     assert refresher.status()["last"] == "stopped from the dashboard"
+
+
+def test_manual_refresh_endpoint_runs_its_own_refresher(tmp_path):
+    import sys
+    from dashboard.server import Refresher
+    db = tmp_path / "agent.db"
+    connect(db).close()
+    instahyre = Refresher([sys.executable, "-c", "print('instahyre')"], tmp_path)
+    manual = Refresher([sys.executable, "-c", "print('manual')"], tmp_path)
+    server = make_server(db, "127.0.0.1", 0, instahyre, manual_refresher=manual)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        response = httpx.post(f"http://127.0.0.1:{server.server_address[1]}/manual/refresh")
+        assert response.status_code == 303 and response.headers["location"] == "/?view=manual"
+    finally:
+        server.shutdown()
+        server.server_close()
+    manual.wait()
+    assert manual.status()["last"] == "manual" and instahyre.status()["last"] == ""
+
+
+def test_manual_view_shows_refresh_button_and_last_result(conn):
+    html = render(conn, "manual", TODAY, manual_refresh={"running": False, "started_at": "2026-10-05T10:05:00", "last": '{"linkedin_applied": 2, "naukri_applied": 1, "expired": 4}'})
+    assert 'action="/manual/refresh"' in html
+    assert "3 applied (2 LinkedIn, 1 Naukri) · 4 expired" in html
+    assert 'action="/manual/refresh"' not in render(conn, "instahyre", TODAY)
+
+
+def test_manual_view_reloads_while_refreshing(conn):
+    html = render(conn, "manual", TODAY, manual_refresh={"running": True, "started_at": "2026-10-05T10:05:00", "last": ""})
+    assert 'http-equiv="refresh"' in html and 'action="/manual/refresh"' not in html

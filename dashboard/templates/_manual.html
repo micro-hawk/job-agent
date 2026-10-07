@@ -1,0 +1,25 @@
+{% from "_icons.html" import icon %}
+{% if manual_refresh.running %}
+<div class="banner live">
+  <span class="pulse"></span>
+  <div>
+    <b>Checking your inbox since {{ manual_refresh.started_at[11:16] }}…</b>
+    <p>Reading LinkedIn and Naukri "application sent" emails. This page reloads every 10 seconds.</p>
+  </div>
+</div>
+{% else %}
+<div class="actions">
+  <form method="post" action="/manual/refresh" class="action" data-toast="Checking your inbox for applications…">
+    <button type="submit" title="Reads LinkedIn and Naukri application confirmation emails (read-only) and hides jobs that are applied or expired">
+      <span class="action-icon">{{ icon('refresh', 20) }}</span>
+      <span><b>Refresh</b><small>Removes jobs you applied to (from the confirmation emails) and jobs older than 21 days.</small></span>
+    </button>
+  </form>
+</div>
+{% if manual_refresh.last %}
+<div class="banner {{ 'bad' if 'gmail' in manual_refresh.last or 'could not' in manual_refresh.last else 'ok' }}">
+  {{ icon('clock', 18) }}
+  <div><b>Last refresh at {{ manual_refresh.started_at[11:16] }}</b><p>{{ manual_refresh.last | describe }}</p></div>
+</div>
+{% endif %}
+{% endif %}

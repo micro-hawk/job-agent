@@ -139,6 +139,24 @@ def instahyre_command(settings: dict, applied_only: bool = False) -> int:
     return 0
 
 
+def manual_refresh_command(conn, settings: dict, password: str, today, fetch=None) -> int:
+    import imaplib
+    from datetime import timedelta
+
+    from agent.manual_sync import EXPIRE_DAYS, fetch_confirmations, sync_manual
+
+    if not password:
+        print("gmail: GMAIL_APP_PASSWORD not set; cannot read application emails")
+        return 1
+    try:
+        messages = (fetch or fetch_confirmations)(settings["gmail"]["user"], password, today - timedelta(days=EXPIRE_DAYS))
+    except (imaplib.IMAP4.error, OSError) as exc:
+        print(f"gmail: {exc.__class__.__name__}: {str(exc)[:120]}")
+        return 1
+    print(json.dumps(sync_manual(conn, messages, today)))
+    return 0
+
+
 def referrals_command(settings: dict) -> int:
     from agent.referrals import build_referrals
 
@@ -165,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     instahyre.add_argument("--applied", action="store_true", help="only remove jobs already on your Instahyre Applied list")
     instahyre.add_argument("--apply", action="store_true", help="open each job in the Instahyre tab and click Apply")
     instahyre.add_argument("--limit", type=int, default=40)
+    commands.add_parser("manual-refresh", help="remove Manual 1-click jobs you applied to (from confirmation emails) or that expired")
     commands.add_parser("referrals", help="draft LinkedIn referral messages for India target companies")
     args = parser.parse_args(argv)
 
@@ -185,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
         return instahyre_command(settings, args.applied)
     if args.command == "referrals":
         return referrals_command(settings)
+    if args.command == "manual-refresh":
+        return manual_refresh_command(connect(DB_PATH), settings, os.environ.get("GMAIL_APP_PASSWORD") or "", datetime.now().date())
     companies = load_companies()
     if args.command == "check-companies":
         return check_companies(companies, settings)

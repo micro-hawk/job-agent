@@ -23,6 +23,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 INSTAHYRE_COMMAND = [sys.executable, "-m", "agent.run", "instahyre"]
 INSTAHYRE_APPLIED_COMMAND = INSTAHYRE_COMMAND + ["--applied"]
 INSTAHYRE_APPLY_COMMAND = INSTAHYRE_COMMAND + ["--apply"]
+MANUAL_REFRESH_COMMAND = [sys.executable, "-m", "agent.run", "manual-refresh"]
+IDLE = {"running": False, "started_at": "", "last": ""}
 ROW_LIMIT = 300
 VIEWS = {
     "ready": ("Ready", ("ready",), "score DESC, id DESC", None),
@@ -116,6 +118,9 @@ def describe_refresh(last: str) -> str:
         result = json.loads(last)
     except ValueError:
         return last
+    if "linkedin_applied" in result:
+        applied = result["linkedin_applied"] + result["naukri_applied"]
+        return f"{applied} applied ({result['linkedin_applied']} LinkedIn, {result['naukri_applied']} Naukri) · {result['expired']} expired"
     if "instahyre_applied" in result:
         text = f"applied to {result['instahyre_applied']} · {result['already_applied']} were already applied · {result['left_for_you']} left for you to check"
         return text + (f" · stopped: {result['stopped']}" if result.get("stopped") else "")
@@ -184,7 +189,7 @@ def _daily_applied(conn: sqlite3.Connection, today: date) -> list[dict]:
     return [{"day": day.isoformat(), "label": str(day.day), "n": per_day.get(day.isoformat(), 0)} for day in days]
 
 
-def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None) -> dict:
+def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None) -> dict:
     view = view if view in VIEWS or view == "referrals" else "today"
     counts = {row["status"]: row["n"] for row in conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
     spend = conn.execute(
@@ -226,12 +231,13 @@ def build_context(conn: sqlite3.Connection, view: str, today: date, refresh: dic
         "daily_max": max([day["n"] for day in daily] + [1]),
         "applied_today": daily[-1]["n"],
         "today": today,
-        "refresh": refresh or {"running": False, "started_at": "", "last": ""},
+        "refresh": refresh or IDLE,
+        "manual_refresh": manual_refresh or IDLE,
     }
 
 
-def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None) -> str:
-    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh))
+def render(conn: sqlite3.Connection, view: str, today: date, refresh: dict | None = None, manual_refresh: dict | None = None) -> str:
+    return _ENV.get_template("index.html").render(**build_context(conn, view, today, refresh, manual_refresh))
 
 
 def mark_applied(conn: sqlite3.Connection, job_id: int) -> bool:
@@ -249,13 +255,20 @@ def mark_referral_sent(conn: sqlite3.Connection, referral_id: int, now: str) -> 
     return cursor.rowcount == 1
 
 
-def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND) -> ThreadingHTTPServer:
+def make_server(db_path, host: str, port: int, refresher: Refresher | None = None, applied_command: list[str] = INSTAHYRE_APPLIED_COMMAND, apply_command: list[str] = INSTAHYRE_APPLY_COMMAND, manual_refresher: Refresher | None = None) -> ThreadingHTTPServer:
     refresher = refresher or Refresher(INSTAHYRE_COMMAND, PROJECT_ROOT)
+    manual_refresher = manual_refresher or Refresher(MANUAL_REFRESH_COMMAND, PROJECT_ROOT)
     instahyre_actions = {"refresh": None, "applied": applied_command, "apply": apply_command}
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             parts = urlparse(self.path).path.strip("/").split("/")
+            if parts == ["manual", "refresh"]:
+                manual_refresher.start()
+                self.send_response(303)
+                self.send_header("Location", "/?view=manual")
+                self.end_headers()
+                return
             if parts == ["instahyre", "stop"]:
                 refresher.stop()
                 self.send_response(303)
@@ -309,7 +322,7 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
             view = parse_qs(url.query).get("view", ["today"])[0]
             conn = connect(db_path)
             try:
-                body = render(conn, view, date.today(), refresher.status()).encode("utf-8")
+                body = render(conn, view, date.today(), refresher.status(), manual_refresher.status()).encode("utf-8")
             finally:
                 conn.close()
             self.send_response(200)
