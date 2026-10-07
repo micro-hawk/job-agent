@@ -118,43 +118,62 @@ def _first_page(context):
     return context.pages[0] if context.pages else context.new_page()
 
 
-def _session_or_close(context) -> tuple[str, object]:
+def open_session(launch, set_visible, login_polls: int = LOGIN_POLLS):
+    context = launch()
+    set_visible(False)
     page = _first_page(context)
     reason = check_session(page)
-    if reason:
-        context.close()
-    return reason, page
-
-
-def open_session(launch, login_polls: int = LOGIN_POLLS):
-    context = launch(headless=True)
-    reason, page = _session_or_close(context)
-    if not reason:
-        return context, page
     if reason == LOGGED_OUT:
-        context = launch(headless=False)
-        signed_in = wait_for_login(_first_page(context), login_polls)
-        context.close()
-        if not signed_in:
+        set_visible(True)
+        if not wait_for_login(page, login_polls):
+            context.close()
             raise InstahyreBlocked(NOT_SIGNED_IN)
-        context = launch(headless=True)
-    else:
-        context = launch(headless=False)
-    reason, page = _session_or_close(context)
+        set_visible(False)
+        reason = check_session(page)
     if reason:
+        context.close()
         raise InstahyreBlocked(reason)
     return context, page
 
 
-def _launcher(playwright, profile_dir):
-    return lambda headless: playwright.chromium.launch_persistent_context(str(profile_dir), headless=headless)
+def browser_pid(process_listing: str, profile_dir) -> str:
+    for line in process_listing.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        if f"--user-data-dir={profile_dir}" in command and "--type=" not in command:
+            return pid
+    return ""
+
+
+def window_switch(profile_dir):
+    import subprocess
+    import sys
+
+    def set_visible(visible: bool) -> None:
+        if sys.platform != "darwin":
+            return
+        listing = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
+        pid = browser_pid(listing, profile_dir)
+        if not pid:
+            return
+        process = f"(first process whose unix id is {pid})"
+        script = f'tell application "System Events" to set visible of {process} to {str(visible).lower()}'
+        if visible:
+            script += f'\ntell application "System Events" to set frontmost of {process} to true'
+        subprocess.run(["osascript", "-e", script], capture_output=True)
+
+    return set_visible
+
+
+def _open(playwright, profile_dir):
+    launch = lambda: playwright.chromium.launch_persistent_context(str(profile_dir), headless=False)
+    return open_session(launch, window_switch(profile_dir))
 
 
 def fetch_facets(profile_dir, facets: tuple[int, ...], pause_ms: int = 2000) -> dict[int, list[dict]]:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        context, page = open_session(_launcher(playwright, profile_dir))
+        context, page = _open(playwright, profile_dir)
         try:
             results = {}
             for facet in facets:
@@ -178,7 +197,6 @@ AGENT_APPLIED_REASON = "applied on Instahyre by the agent"
 APPLY_BUTTON = "button[ng-click='submitChoice(opp, true)']:visible"
 SENT_SCRIPT = "() => { const e = document.querySelector('.application-sent'); return !!e && e.offsetParent !== null; }"
 APPLY_CONFIRM_SECONDS = 15
-TAB_CLOSED = "you closed the Instahyre tab"
 WINDOW_CLOSED = "the Instahyre window was closed"
 LEFT_REASONS = {
     "unconfirmed": "clicked Apply but Instahyre did not confirm — check this one",
@@ -225,13 +243,11 @@ def apply_one(page, url: str) -> str:
     return "unconfirmed"
 
 
-def apply_jobs(new_page, jobs: list[dict], record, sleep, pause_seconds: float, stop_file) -> str:
+def apply_jobs(page, jobs: list[dict], record, sleep, pause_seconds: float, stop_file) -> str:
     for job in jobs:
         if stop_file.exists():
             return "STOP file"
-        try:
-            page = new_page()
-        except PlaywrightError:
+        if page.is_closed():
             return WINDOW_CLOSED
         try:
             outcome = apply_one(page, job["url"])
@@ -239,12 +255,9 @@ def apply_jobs(new_page, jobs: list[dict], record, sleep, pause_seconds: float, 
             return str(blocked)
         except PlaywrightError as exc:
             if page.is_closed():
-                return TAB_CLOSED
+                return WINDOW_CLOSED
             print(f"instahyre: {job['url']}: {str(exc).splitlines()[0]}")
             outcome = "error"
-        finally:
-            if not page.is_closed():
-                page.close()
         record(job["id"], outcome)
         if outcome == "applied":
             sleep(pause_seconds)
@@ -258,10 +271,10 @@ def apply_on_instahyre(profile_dir, jobs: list[dict], record, pause_seconds: flo
 
     with sync_playwright() as playwright:
         try:
-            context, _ = open_session(_launcher(playwright, profile_dir))
+            context, page = _open(playwright, profile_dir)
         except InstahyreBlocked as blocked:
             return str(blocked)
         try:
-            return apply_jobs(context.new_page, jobs, record, time.sleep, pause_seconds, stop_file)
+            return apply_jobs(page, jobs, record, time.sleep, pause_seconds, stop_file)
         finally:
             context.close()

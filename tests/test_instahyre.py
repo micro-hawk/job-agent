@@ -125,6 +125,22 @@ class FakePage:
         return self.closed
 
 
+class JobByJobPage:
+    def __init__(self, pages):
+        self.pages = iter(pages)
+        self.current = None
+
+    def goto(self, url, wait_until=None):
+        self.current = next(self.pages)
+        return self.current.goto(url, wait_until)
+
+    def is_closed(self):
+        return bool(self.current) and self.current.is_closed()
+
+    def __getattr__(self, name):
+        return getattr(self.current, name)
+
+
 def test_apply_one_clicks_apply_and_waits_for_confirmation():
     from agent.discover.instahyre import apply_one
     page = FakePage("open")
@@ -147,8 +163,8 @@ def test_apply_jobs_leaves_a_job_that_errors_and_moves_on(tmp_path):
     broken.broken = True
     pages = iter([broken, FakePage("open")])
     results = []
-    stopped = apply_jobs(lambda: next(pages), [{"id": 1, "url": "u"}, {"id": 2, "url": "v"}], lambda job_id, outcome: results.append((job_id, outcome)), lambda s: None, 10, tmp_path / "STOP")
-    assert stopped == "" and results == [(1, "error"), (2, "applied")] and broken.closed
+    stopped = apply_jobs(JobByJobPage(pages), [{"id": 1, "url": "u"}, {"id": 2, "url": "v"}], lambda job_id, outcome: results.append((job_id, outcome)), lambda s: None, 10, tmp_path / "STOP")
+    assert stopped == "" and results == [(1, "error"), (2, "applied")] and not broken.closed
 
 
 def test_apply_one_stops_on_challenge():
@@ -166,17 +182,17 @@ def test_apply_jobs_uses_a_tab_per_job_records_results_and_stops_when_blocked(tm
     opened = iter(pages)
     results, sleeps = [], []
     jobs = [{"id": n, "url": f"u{n}"} for n in range(4)]
-    stopped = apply_jobs(lambda: next(opened), jobs, lambda job_id, outcome: results.append((job_id, outcome)), sleeps.append, 10, tmp_path / "STOP")
+    stopped = apply_jobs(JobByJobPage(opened), jobs, lambda job_id, outcome: results.append((job_id, outcome)), sleeps.append, 10, tmp_path / "STOP")
     assert results == [(0, "applied"), (1, "already")]
     assert stopped == "Cloudflare human check"
-    assert all(page.closed for page in pages[:3]) and pages[3].clicks == 0
+    assert pages[3].clicks == 0
     assert sleeps == [10]
 
 
 def test_apply_jobs_honours_stop_file(tmp_path):
     from agent.discover.instahyre import apply_jobs
     (tmp_path / "STOP").touch()
-    assert apply_jobs(lambda: FakePage("open"), [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "STOP file"
+    assert apply_jobs(FakePage("open"), [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "STOP file"
 
 
 def test_apply_queue_and_record_apply(conn):
@@ -196,25 +212,21 @@ def test_apply_queue_and_record_apply(conn):
     assert [job["id"] for job in apply_queue(conn, 10)] == [queue[2]["id"], *[r["id"] for r in conn.execute("SELECT id FROM jobs WHERE external_id='3'")]]
 
 
-def test_apply_jobs_stops_when_you_close_the_tab(tmp_path):
+def test_apply_jobs_stops_when_you_close_the_window(tmp_path):
     from agent.discover.instahyre import apply_jobs
     closing = FakePage("open")
     closing.user_closes = True
     pages = iter([closing, FakePage("open")])
     results = []
-    stopped = apply_jobs(lambda: next(pages), [{"id": 1, "url": "u"}, {"id": 2, "url": "v"}], lambda *a: results.append(a), lambda s: None, 10, tmp_path / "STOP")
-    assert stopped == "you closed the Instahyre tab" and results == []
+    stopped = apply_jobs(JobByJobPage(pages), [{"id": 1, "url": "u"}, {"id": 2, "url": "v"}], lambda *a: results.append(a), lambda s: None, 10, tmp_path / "STOP")
+    assert stopped == "the Instahyre window was closed" and results == []
 
 
 def test_apply_jobs_stops_when_the_window_is_gone(tmp_path):
-    from playwright.sync_api import Error
-
     from agent.discover.instahyre import apply_jobs
-
-    def gone():
-        raise Error("Target page, context or browser has been closed")
-
-    assert apply_jobs(gone, [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "the Instahyre window was closed"
+    page = FakePage("open")
+    page.closed = True
+    assert apply_jobs(page, [{"id": 1, "url": "u"}], lambda *a: None, lambda s: None, 10, tmp_path / "STOP") == "the Instahyre window was closed"
 
 
 class FakeContext:
@@ -230,57 +242,53 @@ class FakeContext:
         self.closed = True
 
 
-def fake_launcher(*pages):
-    queue = list(pages)
-    launches = []
-
-    def launch(headless):
-        context = FakeContext(queue.pop(0))
-        launches.append((headless, context))
-        return context
-
-    return launch, launches
-
-
 LOGIN_URL = "https://www.instahyre.com/login/"
 
 
-def test_open_session_stays_hidden_when_signed_in():
+def open_with(page, login_polls=3):
     from agent.discover.instahyre import open_session
-    launch, launches = fake_launcher(FakePage("open"))
-    context, page = open_session(launch, login_polls=3)
-    assert [headless for headless, _ in launches] == [True]
-    assert context is launches[0][1] and not context.closed
+    context = FakeContext(page)
+    shown = []
+    open_session(lambda: context, shown.append, login_polls)
+    return context, shown
 
 
-def test_open_session_shows_a_window_only_to_sign_in_then_goes_hidden():
-    from agent.discover.instahyre import open_session
-    login = FakePage("open", url=LOGIN_URL)
-    signing_in = FakePage("open", url=LOGIN_URL)
-    signing_in.urls_after_poll = ["https://www.instahyre.com/candidate/opportunities/"]
-    launch, launches = fake_launcher(login, signing_in, FakePage("open"))
-    context, _ = open_session(launch, login_polls=3)
-    assert [headless for headless, _ in launches] == [True, False, True]
-    assert launches[0][1].closed and launches[1][1].closed and not context.closed
+def test_open_session_keeps_the_window_hidden_when_signed_in():
+    context, shown = open_with(FakePage("open"))
+    assert shown == [False] and not context.closed
+
+
+def test_open_session_shows_the_window_only_to_sign_in_then_hides_it():
+    page = FakePage("open", url=LOGIN_URL)
+    page.urls_after_poll = [LOGIN_URL, "https://www.instahyre.com/candidate/opportunities/"]
+    context, shown = open_with(page)
+    assert shown == [False, True, False] and not context.closed
 
 
 def test_open_session_gives_up_when_you_do_not_sign_in():
     import pytest
-    from agent.discover.instahyre import InstahyreBlocked, open_session
-    launch, launches = fake_launcher(FakePage("open", url=LOGIN_URL), FakePage("open", url=LOGIN_URL))
+    from agent.discover.instahyre import InstahyreBlocked
+    context = FakeContext(FakePage("open", url=LOGIN_URL))
+    from agent.discover.instahyre import open_session
     with pytest.raises(InstahyreBlocked, match="not signed in"):
-        open_session(launch, login_polls=3)
-    assert all(context.closed for _, context in launches)
+        open_session(lambda: context, lambda visible: None, 3)
+    assert context.closed
 
 
-def test_open_session_falls_back_to_a_window_when_hidden_run_is_challenged_and_never_passes_a_challenge():
+def test_open_session_stops_on_a_challenge_and_never_passes_it():
     import pytest
     from agent.discover.instahyre import InstahyreBlocked, open_session
-    launch, launches = fake_launcher(FakePage("open", text="Just a moment"), FakePage("open"))
-    context, _ = open_session(launch, login_polls=3)
-    assert [headless for headless, _ in launches] == [True, False] and not context.closed
-
-    launch, launches = fake_launcher(FakePage("open", text="Just a moment"), FakePage("open", text="Just a moment"))
+    context = FakeContext(FakePage("open", text="Just a moment"))
     with pytest.raises(InstahyreBlocked, match="Cloudflare"):
-        open_session(launch, login_polls=3)
-    assert all(context.closed for _, context in launches)
+        open_session(lambda: context, lambda visible: None, 3)
+    assert context.closed and context.page.clicks == 0
+
+
+def test_browser_pid_finds_the_main_process_for_the_profile():
+    from agent.discover.instahyre import browser_pid
+    listing = """  101 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+  202 /x/Google Chrome for Testing --type=renderer --user-data-dir=/data/instahyre-profile
+  303 /x/Google Chrome for Testing --no-first-run --user-data-dir=/data/instahyre-profile --remote-debugging-pipe
+  404 /x/Google Chrome for Testing --user-data-dir=/tmp/other"""
+    assert browser_pid(listing, "/data/instahyre-profile") == "303"
+    assert browser_pid(listing, "/nowhere") == ""
