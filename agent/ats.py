@@ -33,19 +33,20 @@ PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
 YEAR = re.compile(r"\b(19|20)\d{2}\b")
 SYSTEM = (
     "You are an applicant tracking system reviewer. Rate the resume below for the given experience level, judging only "
-    "what the resume actually says. impact: how well achievements show measurable results. seniority: how well the scope, "
+    "what the resume actually says. Give impact, seniority and clarity each as an integer from 0 to 100. impact: how well achievements show measurable results. seniority: how well the scope, "
     "ownership and leadership match the level. clarity: plain, scannable wording with strong action verbs. keywords: the "
     "most important skills and terms (up to 20, as short phrases) from the job description, or, when there is none, the "
     "ones typical for backend software roles at this level. fixes: the five most useful concrete changes. A fix may "
     "reword, reorder, quantify or surface what the resume already shows; never suggest adding experience, skills, "
     "employers or numbers the candidate has not shown."
 )
+RATING = {"type": "integer", "minimum": 0, "maximum": 100}
 SCHEMA = {
     "type": "object",
     "properties": {
-        "impact": {"type": "integer"},
-        "seniority": {"type": "integer"},
-        "clarity": {"type": "integer"},
+        "impact": RATING,
+        "seniority": RATING,
+        "clarity": RATING,
         "keywords": {"type": "array", "items": {"type": "string"}},
         "fixes": {"type": "array", "items": {"type": "string"}},
     },
@@ -118,6 +119,8 @@ def score_resume(text: str, pages: int, level: str, jd: str, llm, model: str) ->
     matched = [keyword for keyword in keywords if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text, re.I)]
     keyword_pct = round(100 * len(matched) / len(keywords)) if keywords else 100
     ratings = [_clamp(rated.get(key)) for key in ("impact", "seniority", "clarity")]
+    if max(ratings) <= 10:
+        ratings = [rating * 10 for rating in ratings]
     content = round(sum(ratings) / 3) if jd.strip() else round((sum(ratings) + keyword_pct) / 4)
     keyword_score = keyword_pct if jd.strip() else None
     return {

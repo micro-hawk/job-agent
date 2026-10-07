@@ -5,7 +5,7 @@ import zipfile
 import pytest
 
 from agent.ats import (
-    LEVELS, AtsInputError, blend, clear_checks, delete_check, extract_text, find_check, fingerprint, parse_checks, record_check, recent_checks,
+    LEVELS, SCHEMA, SYSTEM, AtsInputError, blend, clear_checks, delete_check, extract_text, find_check, fingerprint, parse_checks, record_check, recent_checks,
     score_resume,
 )
 
@@ -119,6 +119,22 @@ def test_score_resume_without_jd_folds_typical_keywords_into_content():
     result = score_resume(RESUME, 1, "senior", "", llm, "sonnet")
     assert result["keyword_score"] is None and result["content_score"] == round((80 + 60 + 70 + 50) / 4)
     assert result["score"] == blend(100, result["content_score"]) and "no job description" in llm.calls[0][2].lower()
+
+
+def test_ratings_are_asked_for_on_a_0_to_100_scale():
+    assert "0 to 100" in SYSTEM
+    assert all(SCHEMA["properties"][key] == {"type": "integer", "minimum": 0, "maximum": 100} for key in ("impact", "seniority", "clarity"))
+
+
+def test_ratings_given_out_of_10_are_scaled_to_100():
+    llm = StubLLM({"ats": rubric(["Kafka"], impact=8, seniority=7, clarity=8)})
+    result = score_resume(RESUME, 1, "mid", "", llm, "sonnet")
+    assert result["ratings"] == {"impact": 80, "seniority": 70, "clarity": 80}
+
+
+def test_low_ratings_on_the_100_scale_are_kept_when_one_is_above_10():
+    llm = StubLLM({"ats": rubric(["Kafka"], impact=8, seniority=40, clarity=9)})
+    assert score_resume(RESUME, 1, "mid", "", llm, "sonnet")["ratings"] == {"impact": 8, "seniority": 40, "clarity": 9}
 
 
 def test_score_resume_rejects_resumes_without_text():
