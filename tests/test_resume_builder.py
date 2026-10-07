@@ -40,8 +40,20 @@ def test_rendering_escapes_resume_text():
 
 def test_resume_links_choose_which_profile_links_the_resume_shows():
     tex = render_tex("classic", RESUME, PROFILE | {"resume_links": ["linkedin", "portfolio"]})
-    assert "alex-morgan-example}" in tex and "alex-morgan.example.com" in tex and "github.com" not in tex
+    assert "alex-morgan-example}" in tex and "alex-morgan.example.com" in tex and "{github.com/alex-morgan-example}" not in tex
     assert "github.com/alex-morgan-example" in render_tex("classic", RESUME, PROFILE)
+
+
+@pytest.mark.parametrize("template", list(TEMPLATES))
+def test_project_links_and_cgpa_render_when_given(template):
+    resume = RESUME | {
+        "projects": [{"name": "Ledgerlite", "stack": ["Python"], "url": "https://github.com/alex/ledgerlite", "bullets": []}, {"name": "Tripboard", "stack": [], "bullets": []}],
+        "education": [{"institution": "Example Institute", "degree": "BE", "cgpa": "8.1/10", "start": "2018-08", "end": "2022-05"},
+                      {"institution": "City College", "degree": "HSC, Science", "start": "2016", "end": "2018"}],
+    }
+    tex = render_tex(template, resume, PROFILE)
+    assert r"\href{https://github.com/alex/ledgerlite}{github.com/alex/ledgerlite}" in tex and tex.count(r"\href{https://github.com/alex/") == 1
+    assert "BE, CGPA 8.1/10" in tex and "{HSC, Science}" in tex and "2016 -- 2018" in tex
 
 
 def test_render_rejects_unknown_templates():

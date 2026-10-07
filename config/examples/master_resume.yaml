@@ -57,6 +57,7 @@ experience:
 projects:
   - name: Ledgerlite
     stack: [Python, FastAPI, SQLite]
+    url: https://github.com/alex-morgan-example/ledgerlite
     bullets:
       - id: pr-ledgerlite
         tags: [python, api, personal-finance]

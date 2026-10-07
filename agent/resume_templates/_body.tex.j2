@@ -23,7 +23,7 @@
 \section{Projects}
 \resumeSubHeadingListStart
 <% for project in resume.projects %>
-  \resumeProjectHeading{\textbf{<< project.name >>}<% if project.stack %> $|$ \emph{<< project.stack|join(', ') >>}<% endif %>}
+  \resumeProjectHeading{\textbf{<< project.name >>}<% if project.stack %> $|$ \emph{<< project.stack|join(', ') >>}<% endif %><% if project.get('url') %> \hfill \small\href{<< project.url|url >>}{<< project.url|display_url >>}<% endif %>}
   <% if project.bullets %>
   \resumeItemListStart
   <% for bullet in project.bullets %>
@@ -48,7 +48,7 @@
 \section{Education}
 \resumeSubHeadingListStart
 <% for school in resume.education %>
-  \resumeSubheading{<< school.institution >>}{<< school.start|default('')|month >> -- << school.end|default('')|month >>}{<< school.degree >>}{<< school.location|default('') >>}
+  \resumeSubheading{<< school.institution >>}{<< school.start|default('')|month >> -- << school.end|default('')|month >>}{<< school.degree >><% if school.get('cgpa') %>, CGPA << school.cgpa >><% endif %>}{<< school.get('location') or '' >>}
 <% endfor %>
 \resumeSubHeadingListEnd
 <% endif %>
