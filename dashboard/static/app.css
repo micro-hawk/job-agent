@@ -481,14 +481,21 @@ a.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); text-d
 .ats-placeholder li .icon { color: var(--green); }
 
 .ats-history { margin-top: 18px; }
-.hist-row { display: grid; grid-template-columns: 44px minmax(0, 1.4fr) 1fr 90px; gap: 14px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line-2); font-size: 13px; }
+.ats-clear { margin-left: auto; align-self: flex-start; }
+.hist-head { display: flex; align-items: center; justify-content: space-between; }
+.hist-head h3 { margin: 0; }
+.hist-head + .hist-row { margin-top: 12px; }
+.icon-btn { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; opacity: .5; transition: all .15s; }
+.hist-row:hover .icon-btn { opacity: 1; }
+.icon-btn:hover { background: var(--bad-soft); color: var(--bad); }
+.hist-row { display: grid; grid-template-columns: 44px minmax(0, 1.4fr) 1fr 90px 28px; gap: 14px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line-2); font-size: 13px; }
 .hist-score { width: 38px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
 .hist-score.good { background: var(--green-soft); color: var(--green); }
 .hist-score.low { background: var(--bad-soft); color: var(--bad); }
 .hist-name { display: flex; flex-direction: column; overflow: hidden; }
 .hist-name small { font-size: 11.5px; }
 .hist-bar { height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
-@media (max-width: 640px) { .hist-row { grid-template-columns: 44px 1fr 80px; } .hist-bar { display: none; } }
+@media (max-width: 640px) { .hist-row { grid-template-columns: 44px 1fr 80px 28px; } .hist-bar { display: none; } }
 
 .scoring { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(6px); animation: fade .25s ease both; }
 .scoring[hidden] { display: none; }

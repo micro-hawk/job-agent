@@ -81,7 +81,7 @@ def _check(name: str, ok: bool, detail: str) -> dict:
 
 def parse_checks(text: str, level: str, pages: int) -> list[dict]:
     words = len(text.split())
-    missing = [section for section, pattern in SECTIONS.items() if not re.search(rf"^\W*({pattern})\b", text, re.I | re.M)]
+    missing = [section for section, pattern in SECTIONS.items() if not re.search(rf"^\W*(?:[A-Za-z&]+\s+){{0,2}}({pattern})\b[^\n]{{0,40}}$", text, re.I | re.M)]
     long_lines = [line for line in text.splitlines() if len(line.split()) >= 6]
     numbered = sum(1 for line in long_lines if re.search(r"\d", line))
     max_pages = LEVELS[level][1]
@@ -140,6 +140,18 @@ def record_check(conn: sqlite3.Connection, filename: str, level: str, result: di
     )
     conn.commit()
     return cursor.lastrowid
+
+
+def delete_check(conn: sqlite3.Connection, check_id: int) -> bool:
+    deleted = conn.execute("DELETE FROM ats_checks WHERE id = ?", (check_id,)).rowcount
+    conn.commit()
+    return bool(deleted)
+
+
+def clear_checks(conn: sqlite3.Connection) -> int:
+    deleted = conn.execute("DELETE FROM ats_checks").rowcount
+    conn.commit()
+    return deleted
 
 
 def recent_checks(conn: sqlite3.Connection, limit: int = HISTORY) -> list[dict]:

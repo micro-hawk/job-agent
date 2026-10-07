@@ -5,7 +5,7 @@ import zipfile
 import pytest
 
 from agent.ats import (
-    LEVELS, AtsInputError, blend, extract_text, parse_checks, record_check, recent_checks, score_resume,
+    LEVELS, AtsInputError, blend, clear_checks, delete_check, extract_text, parse_checks, record_check, recent_checks, score_resume,
 )
 
 from tests.fakes import NOW, StubLLM
@@ -133,3 +133,18 @@ def test_checks_are_kept_as_history(conn):
     assert [check["filename"] for check in history] == ["b.pdf", "a.pdf"]
     assert history[0]["result"]["parse_score"] == 100 and history[0]["level_label"] == "Mid (3–5 yrs)"
     assert "Jane Doe" not in json.dumps(history)
+
+
+def test_section_headings_may_have_a_qualifier():
+    text = RESUME.replace("EXPERIENCE", "Professional Experience").replace("SKILLS", "Technical Skills")
+    assert checks_by_name(text, "mid")["sections"]["ok"]
+    prose = RESUME.replace("SKILLS\n", "I picked up many new skills while working with the platform team\n")
+    assert "Skills" in checks_by_name(prose, "mid")["sections"]["detail"]
+
+
+def test_checks_can_be_deleted_one_at_a_time_or_all(conn):
+    llm = StubLLM({"ats": rubric(["Kafka"])})
+    ids = [record_check(conn, name, "mid", score_resume(RESUME, 1, "mid", "", llm, "sonnet"), NOW) for name in ("a.pdf", "b.pdf", "c.pdf")]
+    assert delete_check(conn, ids[1]) and not delete_check(conn, ids[1])
+    assert [check["filename"] for check in recent_checks(conn)] == ["c.pdf", "a.pdf"]
+    assert clear_checks(conn) == 2 and recent_checks(conn) == []

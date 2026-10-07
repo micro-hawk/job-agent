@@ -544,3 +544,23 @@ def test_ats_upload_rejects_bad_input_without_storing(tmp_path):
         server.shutdown()
         server.server_close()
     assert conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 0
+
+
+def test_ats_checks_can_be_cleared_from_the_page(tmp_path):
+    from agent.ats import record_check
+    db = tmp_path / "agent.db"
+    conn = connect(db)
+    ids = [record_check(conn, name, "mid", ats_result(), NOW) for name in ("a.pdf", "b.pdf", "c.pdf")]
+    html = render(conn, "ats", TODAY)
+    assert f'action="/ats/{ids[2]}/delete"' in html and f'action="/ats/{ids[0]}/delete"' in html and 'action="/ats/clear"' in html
+    server, base = serve_ats(db, None)
+    try:
+        response = httpx.post(f"{base}/ats/{ids[2]}/delete")
+        assert response.status_code == 303 and response.headers["location"] == "/?view=ats"
+        assert [row[0] for row in conn.execute("SELECT filename FROM ats_checks ORDER BY id")] == ["a.pdf", "b.pdf"]
+        assert httpx.post(f"{base}/ats/clear").headers["location"] == "/?view=ats"
+        assert "Your score will appear here" in httpx.get(f"{base}/?view=ats").text
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert conn.execute("SELECT COUNT(*) FROM ats_checks").fetchone()[0] == 0

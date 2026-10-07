@@ -50,6 +50,9 @@
         <div class="muted">{{ latest.level_label }} · {{ 'scored against the job description' if r.with_jd else 'no job description' }}</div>
         <div class="muted">{{ latest.created_at[:16] | replace('T', ' ') }}</div>
       </div>
+      <form method="post" action="/ats/{{ latest.id }}/delete" class="ats-clear">
+        <button type="submit" class="btn small" data-confirm="Remove this result?">{{ icon('x', 13) }} Clear</button>
+      </form>
     </div>
 
     {% set bars = [('Parsing', r.parse_score)] + ([('Keywords', r.keyword_score)] if r.keyword_score is not none else []) + [('Content', r.content_score), ('Impact', r.ratings.impact), ('Seniority', r.ratings.seniority), ('Clarity', r.ratings.clarity)] %}
@@ -97,15 +100,19 @@
   {% endif %}
 </div>
 
-{% if ats_checks | length > 1 %}
+{% if ats_checks %}
 <section class="card ats-history">
-  <h3>History</h3>
+  <div class="hist-head">
+    <h3>History</h3>
+    <form method="post" action="/ats/clear"><button type="submit" class="btn small" data-confirm="Remove all {{ ats_checks | length }} results?">Clear all</button></form>
+  </div>
   {% for check in ats_checks %}
   <div class="hist-row">
     <span class="hist-score {{ band(check.score) }}">{{ check.score }}</span>
     <span class="hist-name">{{ check.filename }}<small class="muted">{{ check.level_label }}</small></span>
     <span class="hist-bar"><i class="{{ band(check.score) }}" style="--w: {{ check.score }}%"></i></span>
     <span class="muted">{{ check.created_at[:10] }}</span>
+    <form method="post" action="/ats/{{ check.id }}/delete"><button type="submit" class="icon-btn" title="Remove this result" aria-label="Remove {{ check.filename }}">{{ icon('x', 14) }}</button></form>
   </div>
   {% endfor %}
 </section>

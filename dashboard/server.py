@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, extract_text, recent_checks, record_check, score_resume
+from agent.ats import LEVELS, MAX_UPLOAD_BYTES, AtsInputError, clear_checks, delete_check, extract_text, recent_checks, record_check, score_resume
 from agent.config import load_settings
 from agent.db import connect, update_job
 from agent.llm import LLM, LLMError
@@ -342,6 +342,14 @@ def make_server(db_path, host: str, port: int, refresher: Refresher | None = Non
                 self.send_response(303)
                 self.send_header("Location", "/?view=manual")
                 self.end_headers()
+                return
+            if parts == ["ats", "clear"] or (len(parts) == 3 and parts[0] == "ats" and parts[1].isdigit() and parts[2] == "delete"):
+                conn = connect(db_path)
+                try:
+                    clear_checks(conn) if parts[1] == "clear" else delete_check(conn, int(parts[1]))
+                finally:
+                    conn.close()
+                self.redirect("/?view=ats")
                 return
             if parts == ["ats", "check"]:
                 length = int(self.headers.get("Content-Length") or 0)
