@@ -44,7 +44,7 @@ Then edit the files in `config/`:
 
 | File | What goes in it |
 |---|---|
-| `profile.yaml` | Your contact details, location, notice period, work authorisation, expected salary and resume PDF path. `resume_links` picks which links the built resume shows |
+| `profile.yaml` | Your contact details, location, notice period, work authorisation, expected salary and resume PDF path. `resume_links` picks which links the built resume shows. `education_form` lists the school names to search for, the degree and the disciplines to pick, in order, on Greenhouse education sections |
 | `master_resume.yaml` | Your resume as structured bullets. The agent only ever uses facts from here |
 | `settings.yaml` | Title rules, markets, salary floors, thresholds, daily caps and the LLM budget. `live: false` keeps applying in dry-run |
 | `companies.yaml` | The career boards to watch (`platform` and board `token`) and a tier per company |

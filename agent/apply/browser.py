@@ -99,8 +99,56 @@ def _employment(page, job: dict) -> None:
     page.locator(_css_id("current-role-0_1")).check()
 
 
-def fill_form(page, fields: list[Field], answers: dict, country: str, employment: dict | None = None) -> list[str]:
+NO_OPTIONS = re.compile(r"^\s*(no options|loading\.*)\s*$", re.I)
+
+
+def education_entry(profile: dict, resume: dict) -> dict | None:
+    form = profile.get("education_form")
+    if not form or not resume.get("education"):
+        return None
+    entry = resume["education"][0]
+    end_year, end_month = entry["end"].split("-")
+    return {**form, "start_year": entry["start"].split("-")[0], "end_month": calendar.month_name[int(end_month)], "end_year": end_year}
+
+
+def _pick(page, name: str, candidates: list[str]) -> str:
+    box = page.locator(_css_id(name)).first
+    for candidate in candidates:
+        box.click()
+        box.fill("")
+        box.press_sequentially(candidate, delay=60)
+        page.wait_for_timeout(2500)
+        options = page.locator(".select__option")
+        texts = [text.strip() for text in options.all_inner_texts()]
+        if not texts or NO_OPTIONS.match(texts[0]):
+            continue
+        exact = [i for i, text in enumerate(texts) if text.lower() == candidate.lower()]
+        index = exact[0] if exact else 0
+        options.nth(index).click(timeout=8000)
+        return texts[index]
+    box.fill("")
+    raise LookupError(f"no option for {candidates}")
+
+
+def _education(page, entry: dict) -> None:
+    _pick(page, "school--0", entry["schools"])
+    _pick(page, "degree--0", [entry["degree"]])
+    _pick(page, "discipline--0", entry["disciplines"])
+    for key, name in (("start_year", "start-year--0"), ("end_year", "end-year--0")):
+        if page.locator(_css_id(name)).count():
+            page.locator(_css_id(name)).fill(entry[key])
+    for name in ("end-month--0", "end-date-month--0"):
+        if page.locator(_css_id(name)).count():
+            _choose(page, name, entry["end_month"])
+
+
+def fill_form(page, fields: list[Field], answers: dict, country: str, employment: dict | None = None, education: dict | None = None) -> list[str]:
     problems = []
+    if education and page.locator(_css_id("school--0")).count():
+        try:
+            _education(page, education)
+        except Exception as exc:
+            problems.append(f"Education: {exc}" if isinstance(exc, LookupError) else f"Education: {exc.__class__.__name__}")
     if employment and page.locator(_css_id("company-name-0")).count():
         try:
             _employment(page, employment)

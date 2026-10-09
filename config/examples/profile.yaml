@@ -48,3 +48,7 @@ expected_salary:
   canada: "CAD 95,000 per year"
   uae: "AED 20,000 per month"
   singapore: "SGD 7,000 per month"
+education_form:
+  schools: [Example Institute of Technology, University of Pune]
+  degree: Bachelor's Degree
+  disciplines: [Computer Science, Engineering]

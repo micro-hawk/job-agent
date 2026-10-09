@@ -5,7 +5,7 @@ from pathlib import Path
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from agent.apply.answers import answer_fields
-from agent.apply.browser import EMBED_URL, current_employment, fill_form, submit, unfilled_required
+from agent.apply.browser import EMBED_URL, current_employment, education_entry, fill_form, submit, unfilled_required
 from agent.apply.form import parse_greenhouse_form
 
 FORM_URL = "https://boards-api.greenhouse.io/v1/boards/{token}/jobs/{job_id}?questions=true"
@@ -47,7 +47,7 @@ class GreenhouseDriver:
                 page.wait_for_load_state("networkidle", timeout=15000)
             except PlaywrightTimeoutError:
                 pass
-            problems = fill_form(page, fields, answers, self.profile["location"]["country"], current_employment(self.resume))
+            problems = fill_form(page, fields, answers, self.profile["location"]["country"], current_employment(self.resume), education_entry(self.profile, self.resume))
             unfilled = unfilled_required(page)
             page.screenshot(path=str(app_dir / "filled.png"), full_page=True)
             if problems or unfilled:
