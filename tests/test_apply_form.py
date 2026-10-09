@@ -159,6 +159,22 @@ def test_common_selects():
     assert _answer(office, market="canada", location="Toronto, Canada") == "Toronto, Canada"
 
 
+def test_current_location_select_matches_city_alias():
+    cities = ["Pune", "Gurugram\xa0", "Hyderabad", "Bangalore\xa0", "Other\xa0"]
+    assert _answer(Field("l", "What is your current job location ?", "select", True, cities)) == "Bangalore\xa0"
+    assert _answer(Field("l", "Where are you currently located?", "select", True, ["Bengaluru", "Pune"])) == "Bengaluru"
+
+
+def test_current_compensation_select_picks_range():
+    ranges = ["0 to 10,00,000", "11,00,000 to 20,00,000", "20,00,000 to 30,00,000"]
+    assert _answer(Field("c", "What is your current compensation ?", "select", True, ranges)) == "11,00,000 to 20,00,000"
+    lpa = ["Below 10 LPA", "10-15 LPA", "15-20 LPA", "20+ LPA"]
+    assert _answer(Field("c", "Current CTC", "select", True, lpa)) == "15-20 LPA"
+    low = Field("c", "Current CTC", "select", True, ["0 to 5,00,000", "5,00,000 to 10,00,000"])
+    answers, missing = answer_fields([low], job("Acme"), PROFILE, RESUME, StubLLM({"choose": lambda prompt: {"option": None}}), TODAY)
+    assert "c" not in answers and missing == ["Current CTC"]
+
+
 def test_salary_expectation_and_signature():
     assert _answer(Field("x", "Salary Expectation", "text", True)) == PROFILE["expected_salary"]["eu"]
     signature = Field("sig", "I certify that the facts set forth in this Application for Employment are true", "text", True)

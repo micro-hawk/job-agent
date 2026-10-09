@@ -61,6 +61,31 @@ def _heard(options: list[str], job: dict) -> str | None:
     return _match(options, rf"^{company}\b.*careers?", *HEARD_PREFERENCES)
 
 
+CITY_ALIASES = {"bengaluru": "bengaluru|bangalore", "bangalore": "bengaluru|bangalore", "gurugram": "gurugram|gurgaon", "mumbai": "mumbai|bombay"}
+LAKH = 100_000
+
+
+def _rupee_range(option: str) -> tuple[float, float] | None:
+    numbers = [float(n.replace(",", "")) for n in re.findall(r"\d[\d,]*(?:\.\d+)?", option)]
+    if not numbers:
+        return None
+    amounts = [n if n >= 1000 else n * LAKH for n in numbers]
+    if re.search(r"below|under|less than|upto|up to", option, re.I):
+        return 0, amounts[0]
+    if len(amounts) == 1:
+        return (amounts[0], float("inf")) if re.search(r"\+|above|more than|over", option, re.I) else None
+    return amounts[0], amounts[1]
+
+
+def _salary_option(options: list[str], lpa: float) -> str | None:
+    amount = lpa * LAKH
+    for option in options:
+        bounds = _rupee_range(option)
+        if bounds and bounds[0] <= amount <= bounds[1]:
+            return option
+    return None
+
+
 def rule_answer(field: Field, job: dict, profile: dict, resume: dict, today: date):
     label = field.label.lower()
     links = profile["links"]
@@ -128,6 +153,11 @@ def rule_answer(field: Field, job: dict, profile: dict, resume: dict, today: dat
             return _yes_no(options, False)
         if re.search(r"preferred office|office location|location preference", label):
             return _match(options, rf"^{job_city}\b")
+        if re.search(r"current (job )?location|currently (located|based)|where are you (currently )?(located|based)", label):
+            city = profile["location"]["city"].lower()
+            return _match(options, rf"^({CITY_ALIASES.get(city, re.escape(city))})\b")
+        if re.search(r"current (ctc|salary|compensation)", label):
+            return _salary_option(options, profile["current_ctc"]["total_lpa"])
         if re.search(r"\bagree\b|acknowledge|consent|privacy|confirm|review the linked", label):
             return _match(options, r"\bagree\b", r"acknowledge", r"\bconfirm\b", r"^yes\b")
         return None
